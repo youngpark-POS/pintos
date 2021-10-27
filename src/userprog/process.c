@@ -28,7 +28,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  char *fn_copy, *dummy, *token;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -38,8 +38,10 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  token = strtok_r(file_name, " ", &dummy);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (token, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -54,15 +56,87 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  char *token, *save, *copyfilename, *dumm;
+  int argc = 0;
+  char **argv;
+  int i, len, total = 0, align, return_addr;
+
+  copyfilename = malloc(strlen(file_name) + 1);
+  strlcpy(copyfilename, file_name, strlen(file_name) + 1);
+  for(token = strtok_r(copyfilename, " ", &save);token != NULL;
+      token = strtok_r(dumm, " ", &save))
+  {
+    argc++;
+    dumm = save;
+  }
+  argv = (char**)malloc(sizeof(char*) * argc);
+  free(copyfilename);
+  copyfilename = malloc(strlen(file_name) + 1);
+  strlcpy(copyfilename, file_name, strlen(file_name) + 1);
+  dumm = copyfilename;
+  for(i = 0;i < argc;i++)
+  {
+    token = strtok_r(dumm, " ", &save);
+    argv[i] = token;
+    dumm = save;
+  }
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (argv[0], &if_.eip, &if_.esp);
+
+  // set stack
+  if (success)
+  {
+    void **esp = &if_.esp;
+    // push argv[]
+    for(i = argc - 1;i >= 0;i--)
+    {
+      len = strlen(argv[i]) + 1;
+      *esp -= len;
+      memcpy(*esp, argv[i], len);
+      argv[i] = *esp;
+      total += len;
+    }
+    // word align
+    align = total % 4;
+    if(align != 0)
+    {
+      align = 4 - align;
+      *esp -= align;
+      memset(*esp, 0, align);
+    }
+    // NULL
+    *esp -= sizeof(char*);
+    memset(*esp, 0, sizeof(char*));
+    // push argv
+    for(i = argc - 1;i >= 0;i--)
+    {
+      *esp -= sizeof(char*);
+      memcpy(*esp, &argv[i], sizeof(char*));
+    }
+    return_addr = *esp;
+    *esp -= sizeof(char**);
+    memcpy(*esp, &return_addr, sizeof(char**));
+    // push argc
+    *esp -= sizeof(int);
+    memcpy(*esp, &argc, sizeof(int));
+    // push return address
+    *esp -= sizeof(void*);
+    memset(*esp, 0, sizeof(void*));
+
+    free(copyfilename);
+    free(argv);
+  }
+
+  sema_up(&thread_current()->parent_process->child_load);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
+  thread_current()->loaded = success;
   if (!success) 
     thread_exit ();
 
@@ -76,6 +150,51 @@ start_process (void *file_name_)
   NOT_REACHED ();
 }
 
+struct thread *
+get_child_process(int pid)
+{
+  struct list_elem* e;
+  struct thread* thr;
+  for(e = list_begin(&thread_current()->child_list);e != list_end(&thread_current()->child_list);
+      e = list_next(e))
+  {
+    thr = list_entry(e, struct thread, child_elem);
+    if(thr->tid == pid) return thr;
+  }
+  return NULL;
+}
+
+void
+remove_child_process(struct thread* target)
+{
+  list_remove(&target->child_elem);
+}
+
+int
+process_add_file(struct file* f)
+{
+  int i;
+  for(i = 2;i <= FD_MAX;i++)
+    if(thread_current()->fd_table[i] == NULL)
+    {
+      thread_current()->fd_table[i] = f;
+      return i;
+    }
+  return -1;
+}
+struct file *
+process_get_file(int fd)
+{
+  return thread_current()->fd_table[fd];
+}
+
+void
+process_close_file(int fd)
+{
+  file_close(thread_current()->fd_table[fd]);
+  thread_current()->fd_table[fd] = NULL;
+}
+
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -86,9 +205,16 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  return -1;
+  struct thread* child = get_child_process(child_tid);
+  int exit_status;
+  if(!child) return -1;
+  sema_down(&thread_current()->child_wait);
+  exit_status = child->exit_code;
+  remove_child_process(child);
+  sema_up(&thread_current()->child_reap);
+  return exit_status;
 }
 
 /* Free the current process's resources. */
@@ -97,6 +223,12 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  int i;
+
+  for(i = 2;i < FD_MAX;i++)
+    if(thread_current()->fd_table[i] != NULL) 
+      process_close_file(i);
+  
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -114,6 +246,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  
 }
 
 /* Sets up the CPU for running user code in the current
