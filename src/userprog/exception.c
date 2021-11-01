@@ -2,7 +2,9 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include "userprog/gdt.h"
+#include "userprog/syscall.h"
 #include "threads/interrupt.h"
+#include "threads/vaddr.h"
 #include "threads/thread.h"
 
 /* Number of page faults processed. */

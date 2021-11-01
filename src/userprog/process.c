@@ -30,6 +30,9 @@ process_execute (const char *file_name)
 {
   char *fn_copy, *dummy, *token;
   tid_t tid;
+  struct list_elem* iter;
+  struct thread* child;
+  struct file* fp;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -42,8 +45,19 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (token, PRI_DEFAULT, start_process, fn_copy);
+
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  sema_down(&thread_current()->child_load);
+
+  for(iter = list_begin(&thread_current()->child_list);iter != list_end(&thread_current()->child_list);
+      iter = list_next(iter))
+    {
+      child = list_entry(iter, struct thread, child_elem);
+      if(!child->loaded)
+        return process_wait(tid);
+    }
   return tid;
 }
 
@@ -138,7 +152,7 @@ start_process (void *file_name_)
   palloc_free_page (file_name);
   thread_current()->loaded = success;
   if (!success) 
-    thread_exit ();
+    syscall_exit(-1);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -226,9 +240,7 @@ process_exit (void)
   int i;
 
   for(i = 2;i < FD_MAX;i++)
-    if(thread_current()->fd_table[i] != NULL) 
-      process_close_file(i);
-  
+    process_close_file(i);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

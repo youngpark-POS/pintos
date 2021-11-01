@@ -123,10 +123,12 @@ syscall_exit(int status)
 int
 syscall_exec(const char* cmdline)
 {
+  /*
   tid_t tid = process_execute(cmdline);
   struct thread* thread_child = get_child_process(tid);
-  sema_down(&thread_current()->child_load);
   return thread_child->loaded ? thread_child->tid : -1;
+  */
+  return process_execute(cmdline);
 }
 
 int
@@ -150,19 +152,28 @@ syscall_remove(const char* file)
 int 
 syscall_open(const char* file)
 {
+  lock_acquire(&file_lock);
   struct file *fp = filesys_open(file);
   int i;
 
-  if(!fp) return -1;
+  if(!fp) 
+  {
+    lock_release(&file_lock);
+    return -1;
+  }
   for(i = 2;i < FD_MAX;i++)
   {
     if(thread_current()->fd_table[i] == NULL)
     {
       thread_current()->fd_table[i] = fp;
+      if(!strcmp(thread_name(), file)) 
+        file_deny_write(fp);
+      lock_release(&file_lock);
       return i;
     }
   }
   filesys_remove(file);
+  lock_release(&file_lock);
   return -1;
 }
 
@@ -178,8 +189,7 @@ syscall_filesize(int fd)
 int
 syscall_read(int fd, void* buffer, unsigned size)
 {
-  struct file *fp;
-  int bytes = 0, retval;
+  int bytes = 0;
   uint8_t* buffer_ptr = (uint8_t*)buffer;
   uint8_t byte;
 
@@ -211,8 +221,7 @@ syscall_read(int fd, void* buffer, unsigned size)
 int
 syscall_write(int fd, void* buffer, unsigned size)
 {
-  struct file *fp;
-  int bytes = 0, retval;
+  int bytes = 0;
   uint8_t* buffer_ptr = (uint8_t*)buffer;
   uint8_t byte;
 
