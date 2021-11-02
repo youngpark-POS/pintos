@@ -123,11 +123,8 @@ syscall_exit(int status)
 int
 syscall_exec(const char* cmdline)
 {
-  /*
-  tid_t tid = process_execute(cmdline);
-  struct thread* thread_child = get_child_process(tid);
-  return thread_child->loaded ? thread_child->tid : -1;
-  */
+  struct list_elem* e;
+  struct thread* child;
   return process_execute(cmdline);
 }
 

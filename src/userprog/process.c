@@ -28,24 +28,25 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy, *dummy, *token;
+  char *fn_copy, *fn_another_copy, *dummy, *token;
   tid_t tid;
   struct list_elem* iter;
   struct thread* child;
   struct file* fp;
-
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
+  fn_another_copy = palloc_get_page(0);
   strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_another_copy, file_name, PGSIZE);
 
-  token = strtok_r(file_name, " ", &dummy);
+  token = strtok_r(fn_another_copy, " ", &dummy);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (token, PRI_DEFAULT, start_process, fn_copy);
-
+  palloc_free_page(fn_another_copy);
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
@@ -237,8 +238,9 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  struct thread* child;
+  struct list_elem* e;
   int i;
-
   for(i = 2;i < FD_MAX;i++)
     process_close_file(i);
 
@@ -258,7 +260,19 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  sema_up(&thread_current()->parent_process->child_wait);
+  list_remove (&thread_current()->allelem);
+  thread_current()->finished = true;
+  sema_down(&thread_current()->parent_process->child_reap);
   
+  for(e = list_begin(&thread_current()->child_list);e != list_end(&thread_current()->child_list);
+      e = list_next(e))
+  {
+    child = list_entry(e, struct thread, child_elem);
+    printf("process %s waits %s\n", thread_name(), child->name);
+    process_wait(child->tid);
+  }
+
 }
 
 /* Sets up the CPU for running user code in the current

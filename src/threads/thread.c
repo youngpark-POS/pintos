@@ -299,10 +299,6 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-  list_remove (&thread_current()->allelem);
-  thread_current()->finished = true;
-  sema_up(&thread_current()->parent_process->child_wait);
-  sema_down(&thread_current()->parent_process->child_reap);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
