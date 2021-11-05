@@ -264,15 +264,6 @@ process_exit (void)
   list_remove (&thread_current()->allelem);
   thread_current()->finished = true;
   sema_down(&thread_current()->parent_process->child_reap);
-  
-  for(e = list_begin(&thread_current()->child_list);e != list_end(&thread_current()->child_list);
-      e = list_next(e))
-  {
-    child = list_entry(e, struct thread, child_elem);
-    printf("process %s waits %s\n", thread_name(), child->name);
-    process_wait(child->tid);
-  }
-
 }
 
 /* Sets up the CPU for running user code in the current

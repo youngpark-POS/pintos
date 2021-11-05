@@ -19,7 +19,7 @@ validate_addr(void* addr)
   for(i = 0;i < 4;i++)
   {
     if(!is_user_vaddr(addr + i)) syscall_exit(-1);
-    if(!pagedir_get_page(thread_current()->pagedir, addr + i)) syscall_exit(-1);
+    if(!pagedir_is_accessed(thread_current()->pagedir, addr + i)) syscall_exit(-1);
   }
 }
 
