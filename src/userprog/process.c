@@ -17,6 +17,9 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "vm/page.h"
+#include "vm/swap.h"
+
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -97,6 +100,8 @@ start_process (void *file_name_)
   }
 
   /* Initialize interrupt frame and load executable. */
+  struct thread *cur = thread_current ();
+  vm_init(&cur->vm);
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
@@ -245,7 +250,8 @@ process_exit (void)
     process_close_file(i);
 
   /* Destroy the current process's page directory and switch back
-     to the kernel-only page directory. */
+     to the kernel-only page directory. */\
+  vm_destroy(&cur->vm);
   pd = cur->pagedir;
   if (pd != NULL) 
     {
@@ -546,25 +552,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
-        return false;
-
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
+      if(vme_create(upage, writable, file, ofs, read_bytes, zero_bytes, false, false)==false) return false;
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -579,18 +567,12 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp) 
 {
-  uint8_t *kpage;
+  void *vaddr=PHYS_BASE-PGSIZE;
   bool success = false;
-
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE;
-      else
-        palloc_free_page (kpage);
-    }
+  if(vme_create(vaddr, true, NULL, 0, 0, 0, false, true)==false) return success;
+  if(vm_load(vaddr)==false) return success;
+  success=true;
+  *esp=PHYS_BASE;
   return success;
 }
 

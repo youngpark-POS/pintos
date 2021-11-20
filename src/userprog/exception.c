@@ -6,6 +6,8 @@
 #include "threads/interrupt.h"
 #include "threads/vaddr.h"
 #include "threads/thread.h"
+#include "vm/page.h"
+#define STACK_SIZE (8*(1<<20))
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -150,16 +152,19 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  if(!user || is_kernel_vaddr(fault_addr) || not_present) syscall_exit(-1);
+  if(!user || is_kernel_vaddr(fault_addr)) syscall_exit(-1);
 
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+  if(fault_addr == NULL || !is_user_vaddr(fault_addr) ||!not_present) syscall_exit(-1);
+
+  if(fault_addr>=(f->esp-32) && find_vme(pg_round_down(fault_addr)) 
+  && PHYS_BASE<=STACK_SIZE+pg_round_down(fault_addr)) // stack access => stack growth
+  {
+     if(vme_create(pg_round_down(page_fault), true, NULL, 0,0,0, false,true)==false)
+     {
+        syscall_exit(-1);
+     }
+  }
+  if(vm_load(pg_round_down(page_fault))==false) syscall_exit(-1);
+  return;
 }
 
