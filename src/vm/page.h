@@ -3,8 +3,9 @@
 #include <list.h>
 #include <hash.h>
 #include "threads/palloc.h"
+#include "threads/thread.h"
 
-#define PAGE_ZORO 0
+#define PAGE_ZERO 0
 #define PAGE_FILE 1
 #define PAGE_MAPP 2
 #define PAGE_SWAP 3
@@ -13,6 +14,7 @@ struct vmentry
 {
     unit8_t type;
     unit8_t pretype;
+    struct thread* thread;
     void *vaddr;
     bool writable;
 
@@ -41,5 +43,6 @@ bool insert_vme(struct hash* vm, struct vmentry * vme);
 bool delete_vme(struct hash* vm, struct vmentry * vme);
 
 bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
-    size_t read_bytes, size_t zero_bytes, bool ismap, bool isstack);
+                size_t read_bytes, size_t zero_bytes, bool ismap, bool isstack);
 bool vm_load(void *vaddr);
+struct vmentry* addr_to_entry(void* addr);

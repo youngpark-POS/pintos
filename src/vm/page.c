@@ -8,7 +8,7 @@
 #include "filesys/file.h"
 #include <string.h>
 
-static usnsigned vm_hash_func(const struct hash_elem *, void* UNUSED);
+static unsigned vm_hash_func(const struct hash_elem *, void* UNUSED);
 static bool vm_less_func(const struct hash_elem *, const struct hash_elem *, void* UNUSED);
 static void vm_destroy_func(struct hash_elme *, void* UNUSED);
 
@@ -47,7 +47,7 @@ static void vm_destroy_func(struct hash_elme *e, void* aux UNUSED)
     free(vme);
 }
 
-struct vmentry* fine_vme(void *vaddr)
+struct vmentry* find_vme(void *vaddr)
 {
     struct hash *vm=&thread_current()->vm;
     struct vmentry vme;
@@ -81,7 +81,7 @@ bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
     size_t read_bytes, size_t zero_bytes, bool ismap, bool isstack)
 {
     struct vme* newone;
-    if(fine_vme(vaddr)==NULL)
+    if(find_vme(vaddr)==NULL)
     {
         newone=malloc(sizeof(struct vmentry));
         if(newone==NULL) return false;
@@ -92,6 +92,7 @@ bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
             {
                 newone->vaddr=vaddr;
                 newone->file=NULL;
+                newone->thread=thread_current();
                 newone->writable=true;
                 newone->read_bytes=0;
                 newone->zero_bytes=0;
@@ -104,6 +105,7 @@ bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
             {
                 newone->vaddr=vaddr;
                 newone->file=file;
+                newone->thread=thread_current();
                 newone->writable=writable;
                 newone->read_bytes=read_bytes;
                 newone->zero_bytes=zero_bytes;
@@ -179,6 +181,6 @@ bool vm_load(void *vaddr)
             return false;
         }
     }
-    fram_push_back(page->frame);
+    frame_push_back(page->frame);
     return true;
 }

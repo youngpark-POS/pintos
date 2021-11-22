@@ -6,6 +6,15 @@
 
 struct lock file_lock;
 
+struct mapping
+{
+    mapid_t mapid;
+    void* addr;
+    struct file* file;
+    struct list_elem elem;
+    int page_num;
+}
+
 void validate_addr(void*);
 void syscall_init (void);
 void syscall_halt(void);

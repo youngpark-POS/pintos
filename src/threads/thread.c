@@ -206,6 +206,7 @@ thread_create (const char *name, int priority,
   sema_init(&t->child_load, 0);
   sema_init(&t->child_wait, 0);
   sema_init(&t->child_reap, 0);
+  list_init(&t->mapping_list);
 
   /* Add to run queue. */
   thread_unblock (t);

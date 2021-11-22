@@ -112,10 +112,12 @@ struct thread
     struct semaphore child_load;
     struct semaphore child_wait;
     struct semaphore child_reap;
+    struct hash vm;
+    struct list mapping_list;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-    struct hash_vm;
+
   };
 
 /* If false (default), use round-robin scheduler.
