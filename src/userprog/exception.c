@@ -6,7 +6,7 @@
 #include "threads/interrupt.h"
 #include "threads/vaddr.h"
 #include "threads/thread.h"
-#include "vm/page.h"
+
 #define STACK_SIZE (8*(1<<20))
 
 /* Number of page faults processed. */

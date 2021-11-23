@@ -8,7 +8,7 @@
 #include "threads/synch.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
-#include "vm/frame.h"
+
 
 static void syscall_handler (struct intr_frame *);
 static int max_mapid = 0;
@@ -272,8 +272,7 @@ syscall_close(int fd)
   process_close_file(fd);
 }
 
-mapid_t
-syscall_mmap(int fd, void* addr)
+int syscall_mmap(int fd, void* addr)
 {
   int len, ofs = 0;
   int page_cnt = 0, read_bytes, zero_bytes;
@@ -306,7 +305,7 @@ syscall_mmap(int fd, void* addr)
     {
       while(ofs > 0)
       {
-        delete_vme(find_vme(addr + ofs - PGSIZE)->thread->vm, find_vme(addr + ofs));
+        //delete_vme(find_vme(addr + ofs - PGSIZE)->thread->vm, find_vme(addr + ofs));
         ofs -= PGSIZE;
       }
       file_close(file);
@@ -322,7 +321,7 @@ syscall_mmap(int fd, void* addr)
   }
   mapping = malloc(sizeof(struct mapping));
   mapping->mapid = max_mapid++;
-  mapping->vaddr = addr;
+  mapping->addr = addr;
   mapping->file = file;
   mapping->page_num = page_cnt;
   list_insert(&thread_current()->mapping_list, &mapping->elem);
@@ -330,13 +329,13 @@ syscall_mmap(int fd, void* addr)
 }
 
 void
-syscall_munmap(mapid_t mapid)
+syscall_munmap(int mapid)
 {
   int i;
   struct mapping* mapping = NULL;
   struct vmentry* entry;
   struct list_elem* e;
-  for(e = list_begin(thread_current()->mapping_list);e != list_end(thread_current()->mapping_list);
+  for(e = list_begin(&thread_current()->mapping_list);e != list_end(&thread_current()->mapping_list);
       e = list_next(e))
   {
     if(list_entry(e, struct mapping, elem)->mapid == mapid)
@@ -354,7 +353,7 @@ syscall_munmap(mapid_t mapid)
     if(entry->frame != NULL)
     {
       if(pagedir_is_dirty(entry->thread->pagedir, entry->vaddr)) 
-        file_write_at(mapping->file, entry->vaddr, PGSIZE, PGSIZE * i)
+        file_write_at(mapping->file, entry->vaddr, PGSIZE, PGSIZE * i);
       frame_deallocate(entry->frame);
     }
     pagedir_clear_page(entry->thread->pagedir);

@@ -1,9 +1,11 @@
 #include <stdint.h>
 #include <debug.h>
 #include <list.h>
+#include <stdio.h>
 #include <hash.h>
 #include "threads/palloc.h"
 #include "threads/thread.h"
+#include "threads/synch.h"
 
 #define PAGE_ZERO 0
 #define PAGE_FILE 1
@@ -12,8 +14,8 @@
 
 struct vmentry
 {
-    unit8_t type;
-    unit8_t pretype;
+    int type;
+    int pretype;
     struct thread* thread;
     void *vaddr;
     bool writable;
@@ -31,13 +33,11 @@ struct vmentry
     struct frame* frame;
 
     struct hash_elem elem;
+};
 
-}
 void vm_init(struct hash *vm);
 void vm_destroy(struct hash *vm);
-static unsigned vm_hash_func(const struct hahs_elem *e, void *aux UNUSED);
-static bool vm_less_func(const struct hash_elem *x, const struct hash_elem *y, void* aux UNUSED);
-static void vm_destroy_func(struct hash_elme *e, void* aux UNUSED);
+
 struct vmentry* fine_vme(void *vaddr);
 bool insert_vme(struct hash* vm, struct vmentry * vme);
 bool delete_vme(struct hash* vm, struct vmentry * vme);

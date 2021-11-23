@@ -3,17 +3,20 @@
 
 #include "threads/thread.h"
 #include "threads/synch.h"
+//#include "vm/page.h"
+#include "vm/frame.h"
+#include<debug.h>
 
 struct lock file_lock;
 
 struct mapping
 {
-    mapid_t mapid;
+    int mapid;
     void* addr;
     struct file* file;
     struct list_elem elem;
     int page_num;
-}
+};
 
 void validate_addr(void*);
 void syscall_init (void);
