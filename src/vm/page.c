@@ -30,7 +30,7 @@ static void vm_destroy_func(struct hash_elem *e, void* aux UNUSED)
     ASSERT(e!=NULL);
     struct vmentry *vme;
     vme=hash_entry(e, struct vmentry, elem);
-    if(vme->frame != NULL) frame_remove(vme->frame,false);
+    // if(vme->frame != NULL) frame_remove(vme->frame,false);
     if(vme->swap_slot!=BITMAP_ERROR) swap_remove(vme->swap_slot);
     free(vme);
 }
@@ -53,7 +53,7 @@ struct vmentry* find_vme(void *vaddr)
     struct vmentry vme;
     struct hash_elem *elem;
     vme.vaddr=pg_round_down(vaddr);
-    ASSERT(pg_ofs(vme.vaddr)==0);
+    // ASSERT(pg_ofs(vme.vaddr)==0);
     elem=hash_find(vm,&vme.elem);
     return elem ? hash_entry(elem, struct vmentry, elem) : NULL;
 }
@@ -61,7 +61,7 @@ struct vmentry* find_vme(void *vaddr)
 bool insert_vme(struct hash* vm, struct vmentry * vme)
 {
     ASSERT(vm!=NULL && vme!=NULL);
-    ASSERT(pg_offs(vme->vaddr)==0);
+    // ASSERT(pg_offs(vme->vaddr)==0);
     if(hash_insert(vm,&vme->elem)==NULL) return true;
     else return false;
 }
@@ -69,9 +69,9 @@ bool insert_vme(struct hash* vm, struct vmentry * vme)
 bool delete_vme(struct hash* vm, struct vmentry * vme)
 {
     ASSERT(vm!=NULL && vme!=NULL);
-    ASSERT(pg_offs(vme->vaddr)==0);
+    // ASSERT(pg_offs(vme->vaddr)==0);
     if(!hash_delete(vm,&vme->elem)) return false;
-    if(vme->frame != NULL) frame_remove(vme->frame,false);
+    // if(vme->frame != NULL) frame_remove(vme->frame,false);
     if(vme->swap_slot!=BITMAP_ERROR) swap_remove(vme->swap_slot);
     free(vme);
     return true;
@@ -138,7 +138,7 @@ bool vm_load(void *vaddr)
         }
         else
         {
-            frame_remove(new_frame, true);
+            // frame_remove(new_frame, true);
             page->is_loaded=false;
             return false;
        }
@@ -147,7 +147,7 @@ bool vm_load(void *vaddr)
     {
         if(file_read_at(page->file,new_frame->paddr,page->read_bytes,page->offset) != (int) page->read_bytes)
         {
-            frame_remove(new_frame, true);
+            // frame_remove(new_frame, true);
             return false;
         }
         else
@@ -161,7 +161,7 @@ bool vm_load(void *vaddr)
         }
         else if(page->is_loaded)
         {
-            frame_remove(new_frame, true);
+            // frame_remove(new_frame, true);
             page->is_loaded=false;
             return false;
         }
@@ -176,7 +176,7 @@ bool vm_load(void *vaddr)
         }
         else
         {
-            frame_remove(new_frame, true);
+            // frame_remove(new_frame, true);
             page->is_loaded=false;
             return false;
         }
