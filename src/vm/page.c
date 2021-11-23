@@ -8,23 +8,11 @@
 #include "filesys/file.h"
 #include <string.h>
 
-static unsigned vm_hash_func(const struct hash_elem *, void* UNUSED);
-static bool vm_less_func(const struct hash_elem *, const struct hash_elem *, void* UNUSED);
-static void vm_destroy_func(struct hash_elme *, void* UNUSED);
 
-void vm_init(struct hash *vm)
-{
-    ASSERT(vm!=NULL);
-    hash_init(vm,vm_hash_func,vm_less_func,NULL);
-}
 
-void vm_destroy(struct hash *vm)
-{
-    ASSERT(vm!=NULL);
-    hash_destroy(vm,vm_destroy_func);
-}
 
-static unsigned vm_hash_func(const struct hahs_elem *e, void *aux UNUSED)
+static unsigned
+vm_hash_func(const struct hash_elem *e, void *aux UNUSED)
 {
     ASSERT(e!=NULL);
     return hash_int(hash_entry(e, struct vmentry, elem)->vaddr);
@@ -37,7 +25,7 @@ static bool vm_less_func(const struct hash_elem *x, const struct hash_elem *y, v
     else return false;
 }
 
-static void vm_destroy_func(struct hash_elme *e, void* aux UNUSED)
+static void vm_destroy_func(struct hash_elem *e, void* aux UNUSED)
 {
     ASSERT(e!=NULL);
     struct vmentry *vme;
@@ -45,6 +33,18 @@ static void vm_destroy_func(struct hash_elme *e, void* aux UNUSED)
     if(vme->frame != NULL) frame_remove(vme->frame,false);
     if(vme->swap_slot!=BITMAP_ERROR) swap_remove(vme->swap_slot);
     free(vme);
+}
+
+void vm_init(struct hash *vm)
+{
+    ASSERT(vm!=NULL);
+    hash_init(vm,vm_hash_func,vm_less_func,NULL);
+}
+
+void vm_destroy(struct hash *vm)
+{
+    ASSERT(vm!=NULL);
+    hash_destroy(vm,vm_destroy_func);
 }
 
 struct vmentry* find_vme(void *vaddr)
@@ -80,7 +80,7 @@ bool delete_vme(struct hash* vm, struct vmentry * vme)
 bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
     size_t read_bytes, size_t zero_bytes, bool ismap, bool isstack)
 {
-    struct vme* newone;
+    struct vmentry* newone;
     if(find_vme(vaddr)==NULL)
     {
         newone=malloc(sizeof(struct vmentry));
@@ -111,7 +111,7 @@ bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
                 newone->zero_bytes=zero_bytes;
                 newone->offset=offset;
                 newone->swap_slot=BITMAP_ERROR;
-                if(ismap==true) newone->type=PAGE_MMAP;
+                if(ismap==true) newone->type=PAGE_MAPP;
                 else newone->type=PAGE_FILE;
                 newone->frame=NULL;
             }
@@ -128,11 +128,11 @@ bool vm_load(void *vaddr)
     page=find_vme(vaddr);
     if(page==NULL || page->is_loaded==true) return false;
     new_frame=frame_allocate(page);
-    if(newframe==NULL) return false;
+    if(new_frame==NULL) return false;
     if(page->type==PAGE_ZERO)
     {
-        if(memset(new_frame->kpage,0,PGSIZE)!=NULL) page->is_loaded=true;
-        if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->kpage, page->writable))
+        if(memset(new_frame->paddr,0,PGSIZE)!=NULL) page->is_loaded=true;
+        if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->paddr, page->writable))
         {
             page->frame=new_frame;
         }
@@ -143,23 +143,23 @@ bool vm_load(void *vaddr)
             return false;
        }
     }
-    else if(page->type==PAGE_FILE || page->type==PAGE_MMAP)
+    else if(page->type==PAGE_FILE || page->type==PAGE_MAPP)
     {
-        if(file_read_at(page->file,new_frame->kpage,page->read_bytes,page->offset) != (int) page->read_bytes)
+        if(file_read_at(page->file,new_frame->paddr,page->read_bytes,page->offset) != (int) page->read_bytes)
         {
             frame_remove(new_frame, true);
             return false;
         }
         else
         {
-            memset(new_frame->kpage + page->read_bytes, 0, page->zero_bytes);
-            page->isloaded=true;
+            memset(new_frame->paddr + page->read_bytes, 0, page->zero_bytes);
+            page->is_loaded=true;
         }
-        if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->kpage, page->writable))
+        if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->paddr, page->writable))
         {
                page->frame=new_frame;
         }
-        else if(page->isloaded)
+        else if(page->is_loaded)
         {
             frame_remove(new_frame, true);
             page->is_loaded=false;
@@ -168,9 +168,9 @@ bool vm_load(void *vaddr)
     }
     else if(page->type==PAGE_SWAP)
     {
-        page->is_loaded=swap_in(new_frame->kpage, page->swap_slot);
+        page->is_loaded=swap_in(new_frame->paddr, page->swap_slot);
         page->type=page->pretype;
-        if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->kpage, page->writable))
+        if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->paddr, page->writable))
         {
             page->frame=new_frame;
         }

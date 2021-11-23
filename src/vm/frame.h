@@ -10,7 +10,7 @@ struct frame
     void* paddr;
     struct vmentry* entry;
     struct list_elem ptable_elem;
-}
+};
 
 void frame_init();
 struct frame* frame_allocate(struct vmentry*);

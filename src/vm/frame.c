@@ -4,15 +4,13 @@
 #include "threads/palloc.h"
 #include "threads/synch.h"
 #include "vm/frame.h"
-#include "vm/page.h"
 #include "vm/swap.h"
 #include "userprog/pagedir.h"
 #include "filesys/file.h"
 #include <string.h>
-#include <list.h>
 
 struct list frame_list;
-struct list_elem clock_pointer;
+struct list_elem* clock_pointer;
 struct lock frame_lock;
 
 uint32_t* frame_to_pagedir(struct frame* f)
@@ -48,7 +46,7 @@ struct frame* frame_allocate(struct vmentry* vme)
 
         new_frame->entry = vme;
     }
-    list_insert(&frame_list, new_frame->ptable_elem);
+    list_insert(&frame_list, &new_frame->ptable_elem);
     lock_release(&frame_lock);
     return new_frame;
 }
@@ -68,7 +66,7 @@ bool frame_destroy(struct frame* f)
 bool frame_deallocate(struct frame* f)
 {
     lock_acquire(&frame_lock);
-    if(clock_pointer == f->ptable_elem)
+    if(&clock_pointer == f->ptable_elem)
         clock_pointer = list_next(clock_pointer);
     
     list_remove(&f->ptable_elem);
