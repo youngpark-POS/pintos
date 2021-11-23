@@ -181,6 +181,7 @@ bool vm_load(void *vaddr)
             return false;
         }
     }
-    frame_push_back(page->frame);
+    //frame_push_back(page->frame);
+    list_insert(&frame_list, &page->frame->ptable_elem);
     return true;
 }

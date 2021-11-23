@@ -56,3 +56,10 @@ size_t swap_in(void* addr, size_t swap_idx)
     lock_release(&swap_lock);
     return swap_idx;
 } 
+
+void swap_remove(size_t swap_idx)
+{
+    lock_acquire(&swap_lock);
+    bitmap_set(swap_bitmap, swap_idx, true);
+    lock_release(&swap_lock);
+}

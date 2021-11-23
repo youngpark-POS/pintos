@@ -1,4 +1,6 @@
-#include <stdint.h>
+#ifndef VM_FRAME_H
+#define VM_FRAME_H
+
 #include <debug.h>
 #include <list.h>
 #include <hash.h>
@@ -12,9 +14,15 @@ struct frame
     struct list_elem ptable_elem;
 };
 
+struct list frame_list;
+struct list_elem* clock_pointer;
+struct lock frame_lock;
+
 void frame_init();
 struct frame* frame_allocate(struct vmentry*);
 struct frame* frame_evict();
 bool frame_destroy(struct frame*);
 bool frame_deallocate(struct frame*);
 
+
+#endif

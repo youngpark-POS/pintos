@@ -9,9 +9,6 @@
 #include "filesys/file.h"
 #include <string.h>
 
-struct list frame_list;
-struct list_elem* clock_pointer;
-struct lock frame_lock;
 
 uint32_t* frame_to_pagedir(struct frame* f)
 {
@@ -54,7 +51,7 @@ struct frame* frame_allocate(struct vmentry* vme)
 bool frame_destroy(struct frame* f)
 {
     lock_acquire(&frame_lock);
-    if(clock_pointer == f->ptable_elem)
+    if(clock_pointer == &f->ptable_elem)
         clock_pointer = list_next(clock_pointer);
     
     list_remove(&f->ptable_elem);
@@ -66,7 +63,7 @@ bool frame_destroy(struct frame* f)
 bool frame_deallocate(struct frame* f)
 {
     lock_acquire(&frame_lock);
-    if(&clock_pointer == f->ptable_elem)
+    if(clock_pointer == &f->ptable_elem)
         clock_pointer = list_next(clock_pointer);
     
     list_remove(&f->ptable_elem);
@@ -83,8 +80,9 @@ bool frame_is_dirty(struct frame* f)
 struct frame* frame_evict()
 {
     struct frame* target;
-    struct entry* entry;
+    struct vmentry* entry;
     bool success = true;
+    int swap_num;
 
     // find victim frame
     while(true)
@@ -92,8 +90,11 @@ struct frame* frame_evict()
         target = list_entry(clock_pointer, struct frame, ptable_elem);
         if(pagedir_is_accessed(frame_to_pagedir(target), target->entry->vaddr))
         {
-            padedir_set_accessed(frame_to_pagedir(target), target->entry->vaddr), false);
-            clock_pointer = list_next(clock_pointer);
+            pagedir_set_accessed(frame_to_pagedir(target), target->entry->vaddr, false);
+            if(clock_pointer == list_tail(&frame_list))
+                clock_pointer = list_front(&frame_list);
+            else 
+                clock_pointer = list_next(clock_pointer);
         }
         else break;
     }
@@ -102,18 +103,22 @@ struct frame* frame_evict()
     switch(entry->type)
     {
     case PAGE_ZERO:
-        success = bool(swap_out(target->paddr));
+        success = swap_out(target->paddr);
         if(!success) return NULL;
     case PAGE_FILE:
         if(entry->writable) 
-            success = bool(swap_out(target->paddr));
+        {
+            success = swap_num = swap_out(target->paddr);
+        }
         if(!success) return NULL;
+        entry->type = PAGE_SWAP;
+        entry->swap_slot = swap_num;
     case PAGE_SWAP:
         if(frame_is_dirty(target))
-            file_write_at(entry->file, target->paddr, entry->read_bytes, entry->ofs);
+            file_write_at(entry->file, target->paddr, entry->read_bytes, entry->offset);
     }
     entry->frame = NULL;
-    list_remove(target->ptable_elem);
+    list_remove(&target->ptable_elem);
     pagedir_clear_page(target->entry->thread->pagedir, entry->vaddr);
     return target;
 }

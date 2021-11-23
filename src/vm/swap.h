@@ -1,3 +1,6 @@
+#ifndef VM_SWAP_H
+#define VM_SWAP_H
+
 #include <stdint.h>
 #include <debug.h>
 #include <list.h>
@@ -15,3 +18,6 @@ struct lock swap_lock;
 void swap_init();
 size_t swap_out(void*);
 size_t swap_in(void*, size_t);
+void swap_remove(size_t);
+
+#endif

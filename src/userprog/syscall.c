@@ -349,7 +349,7 @@ syscall_munmap(int mapid)
   lock_acquire(&file_lock);
   for(i = 0;i < mapping->page_num;i++)
   {
-    if((entry = fild_vme(mapping->addr + i * PGSIZE)) == NULL) continue;
+    if((entry = find_vme(mapping->addr + i * PGSIZE)) == NULL) continue;
     if(entry->frame != NULL)
     {
       if(pagedir_is_dirty(entry->thread->pagedir, entry->vaddr)) 

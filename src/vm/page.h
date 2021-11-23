@@ -1,3 +1,6 @@
+#ifndef VM_PAGE_H
+#define VM_PAGE_H
+
 #include <stdint.h>
 #include <debug.h>
 #include <list.h>
@@ -46,3 +49,5 @@ bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
                 size_t read_bytes, size_t zero_bytes, bool ismap, bool isstack);
 bool vm_load(void *vaddr);
 struct vmentry* addr_to_entry(void* addr);
+
+#endif
