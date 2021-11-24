@@ -13,10 +13,14 @@
 
 void swap_init()
 {
-    lock_init(&swap_lock);
-    swap_block = block_get_role(BLOCK_SWAP);
+    
+    swap_block = block_get_role(3);
+    ASSERT(swap_block!=NULL);
     swap_bitmap = bitmap_create(block_size(swap_block) / SECTORS_PER_ENTRY);
+    ASSERT(swap_bitmap!=NULL);
+    //swap_bitmap = bitmap_create(8*1024);
     bitmap_set_all(swap_bitmap, true);
+    lock_init(&swap_lock);
 }
 
 size_t swap_out(void* addr)
