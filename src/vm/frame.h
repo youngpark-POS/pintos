@@ -18,11 +18,13 @@ struct list frame_list;
 struct list_elem* clock_pointer;
 struct lock frame_lock;
 
-void frame_init();
+void frame_init(void);
 struct frame* frame_allocate(struct vmentry*);
-struct frame* frame_evict();
+struct frame* frame_evict(void);
 bool frame_destroy(struct frame*);
 bool frame_deallocate(struct frame*);
-
-
+void frame_push_back(struct frame*);
+bool is_tail (struct list_elem *);
+uint32_t* frame_to_pagedir(struct frame* );
+struct frame* frame_evict(void);
 #endif
