@@ -100,8 +100,8 @@ start_process (void *file_name_)
   }
 
   /* Initialize interrupt frame and load executable. */
-  struct thread *cur = thread_current ();
-  vm_init(&cur->vm);
+  //struct thread *cur = thread_current ();
+  //vm_init(&cur->vm);
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
