@@ -81,15 +81,19 @@ bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
     if(find_vme(vaddr)==NULL)
     {
         newone=malloc(sizeof(struct vmentry));
-        if(newone==NULL) return false;
+        if(newone==NULL)
+        {
+            ASSERT(!"MM");
+            return false;
+        }
         else
         {
-            memset(newone,0,sizeof(struct vmentry));
+            
+            //memset(newone,0,sizeof(struct vmentry));
             if(isstack==true)
             {
                 newone->vaddr=vaddr;
                 newone->file=NULL;
-                newone->thread=thread_current();
                 newone->writable=true;
                 newone->read_bytes=0;
                 newone->zero_bytes=0;
@@ -101,9 +105,9 @@ bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
             }
             else
             {
+                //
                 newone->vaddr=vaddr;
                 newone->file=file;
-                newone->thread=thread_current();
                 newone->writable=writable;
                 newone->read_bytes=read_bytes;
                 newone->zero_bytes=zero_bytes;
@@ -114,7 +118,8 @@ bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
                 newone->frame=NULL;
                 newone->thread=thread_current();
             }
-            insert_vme(&thread_current()->vm, newone);
+           if(insert_vme(&thread_current()->vm, newone)==false) ASSERT(!"MM2");
+           return true;
         }
     }
     else return false;
@@ -125,11 +130,24 @@ bool vm_load(void *vaddr)
     struct vmentry* page;
     struct frame* new_frame;
     page=find_vme(vaddr);
-    if(page==NULL || page->is_loaded==true) return false;
+    //ASSERT(page==NULL);
+    if(page->frame!=NULL || page==NULL)
+    {
+        ASSERT(!"vm2");
+        return false;
+    }
+    //ASSERT(!"vm23");
     new_frame=frame_allocate(page);
-    if(new_frame==NULL) return false;
+    ASSERT(!"vm33");
+    if(new_frame==NULL)
+    {
+        //ASSERT(!"vm3");
+        return false;
+    }
+    ASSERT(!"vm4");
     if(page->type==PAGE_ZERO)
     {
+        ASSERT(!"vm3");
         if(memset(new_frame->paddr,0,PGSIZE)!=NULL) page->is_loaded=true;
         if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->paddr, page->writable))
         {
@@ -144,6 +162,7 @@ bool vm_load(void *vaddr)
     }
     else if(page->type==PAGE_FILE || page->type==PAGE_MAPP)
     {
+        ASSERT(!"vm3");
         if(file_read_at(page->file,new_frame->paddr,page->read_bytes,page->offset) != (int) page->read_bytes)
         {
             frame_destroy(new_frame);
@@ -167,6 +186,7 @@ bool vm_load(void *vaddr)
     }
     else if(page->type==PAGE_SWAP)
     {
+        ASSERT(!"vm3");
         page->is_loaded=swap_in(new_frame->paddr, page->swap_slot);
         page->type=page->pretype;
         if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->paddr, page->writable))

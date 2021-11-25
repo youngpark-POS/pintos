@@ -117,7 +117,7 @@ main (void)
   syscall_init ();
 #endif
 
-  swap_init();
+  //swap_init();
   frame_init();
   /* Start thread scheduler and enable interrupts. */
   thread_start ();
@@ -130,6 +130,9 @@ main (void)
   locate_block_devices ();
   filesys_init (format_filesys);
 #endif
+  swap_init();
+  
+    
 
   printf ("Boot complete.\n");
   
