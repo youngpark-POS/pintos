@@ -164,19 +164,15 @@ page_fault (struct intr_frame *f)
   
   if(is_stack_access(fault_addr, f->esp)) // stack access => stack growth
   {
-     //
      if(vme_create(pg_round_down(fault_addr), true, NULL, 0,0,0, false,true)==false)
      {
         syscall_exit(-1);
      }
   }
-  //ASSERT(!"page_fault2");
   if(vm_load(pg_round_down(fault_addr))==false)
   {
-     ASSERT(!"page_fault3");
      syscall_exit(-1);
   }
-  ASSERT(!"page_fault");
   return;
 }
 

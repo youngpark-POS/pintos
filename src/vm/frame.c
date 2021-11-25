@@ -23,7 +23,7 @@ uint32_t* frame_to_pagedir(struct frame* f)
 void frame_push_back(struct frame* f)
 {
     lock_acquire(&frame_lock);
-    list_insert(&frame_list, &f->ptable_elem);
+    list_push_back(&frame_list, &f->ptable_elem);
     lock_release(&frame_lock);
 }
 
@@ -38,24 +38,22 @@ struct frame* frame_allocate(struct vmentry* vme)
 {
     struct frame* new_frame=NULL;
     void* paddr;
-    //SSERT(!"frame1");
+    printf("frame_allocate entered\n");
+
     lock_acquire(&frame_lock);
     //ASSERT(!"frame2");
     if((paddr = palloc_get_page(PAL_USER)) != NULL)
     {
         //ASSERT(!"frame3");
-        if((new_frame = malloc(sizeof(struct frame)) != NULL))
+        new_frame = malloc(sizeof(struct frame));
+        if(new_frame != NULL)
         {
             //ASSERT(!"frame4");
-            //new_frame->paddr = paddr;
+            new_frame->paddr = paddr;
             new_frame->entry = vme;
-            ASSERT(!"frame1");
-            new_frame->entry = vme;
-            ASSERT(!"frame2");
         }
         else
         {
-            ASSERT(!"frame5");
             palloc_free_page(paddr);
         }
     }
@@ -65,7 +63,7 @@ struct frame* frame_allocate(struct vmentry* vme)
 
         new_frame->entry = vme;
     }
-    //list_insert(&frame_list, &new_frame->ptable_elem);
+    list_push_back(&frame_list, &new_frame->ptable_elem);
     lock_release(&frame_lock);
     return new_frame;
 }
@@ -106,6 +104,7 @@ struct frame* frame_evict(void)
     bool success = true;
     int swap_num;
 
+    printf("frame_evict entered\n");
     // find victim frame
     while(true)
     {

@@ -78,6 +78,9 @@ bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
     size_t read_bytes, size_t zero_bytes, bool ismap, bool isstack)
 {
     struct vmentry* newone;
+    printf("vme_create entered\n");
+    printf("addr %p, file %p, bytes %d %d, map %s, stack %s\n", 
+            vaddr, file, read_bytes, zero_bytes, ismap?"O":"X", isstack?"O":"X");
     if(find_vme(vaddr)==NULL)
     {
         newone=malloc(sizeof(struct vmentry));
@@ -129,25 +132,19 @@ bool vm_load(void *vaddr)
 {
     struct vmentry* page;
     struct frame* new_frame;
+    printf("vm_load entered, addr %p\n", vaddr);
     page=find_vme(vaddr);
-    //ASSERT(page==NULL);
     if(page->frame!=NULL || page==NULL)
     {
-        ASSERT(!"vm2");
         return false;
     }
-    //ASSERT(!"vm23");
     new_frame=frame_allocate(page);
-    ASSERT(!"vm33");
     if(new_frame==NULL)
     {
-        //ASSERT(!"vm3");
         return false;
     }
-    ASSERT(!"vm4");
     if(page->type==PAGE_ZERO)
     {
-        ASSERT(!"vm3");
         if(memset(new_frame->paddr,0,PGSIZE)!=NULL) page->is_loaded=true;
         if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->paddr, page->writable))
         {
@@ -155,16 +152,22 @@ bool vm_load(void *vaddr)
         }
         else
         {
+            printf("page %p failed to grow stack\n", page); //TODO debug
             frame_destroy(new_frame);
             page->is_loaded=false;
             return false;
-       }
+        }
     }
     else if(page->type==PAGE_FILE || page->type==PAGE_MAPP)
     {
-        ASSERT(!"vm3");
-        if(file_read_at(page->file,new_frame->paddr,page->read_bytes,page->offset) != (int) page->read_bytes)
+        printf("reopened file %n", file_reopen(page->file));
+        int readlen = file_read_at(page->file, new_frame->paddr, page->read_bytes, page->offset);
+        if(readlen != (int) page->read_bytes) //TODO debug
         {
+            printf("page offset %d\n", page->offset);
+            printf("type %d\n", page->type); // 1 file, 2 mapp
+            printf("file %p\n", page->file);
+            printf("%d %d\n", readlen, page->read_bytes);
             frame_destroy(new_frame);
             return false;
         }
@@ -186,7 +189,7 @@ bool vm_load(void *vaddr)
     }
     else if(page->type==PAGE_SWAP)
     {
-        ASSERT(!"vm3");
+        ASSERT(!"vm3 SWAP");
         page->is_loaded=swap_in(new_frame->paddr, page->swap_slot);
         page->type=page->pretype;
         if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->paddr, page->writable))
@@ -200,6 +203,7 @@ bool vm_load(void *vaddr)
             return false;
         }
     }
+    // ASSERT(!"vm3 exit");
     frame_push_back(page->frame);
     return true;
 }
