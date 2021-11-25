@@ -36,18 +36,28 @@ void frame_init(void)
 
 struct frame* frame_allocate(struct vmentry* vme)
 {
-    struct frame* new_frame;
+    struct frame* new_frame=NULL;
     void* paddr;
-    
+    //SSERT(!"frame1");
     lock_acquire(&frame_lock);
+    //ASSERT(!"frame2");
     if((paddr = palloc_get_page(PAL_USER)) != NULL)
     {
+        //ASSERT(!"frame3");
         if((new_frame = malloc(sizeof(struct frame)) != NULL))
         {
-            new_frame->paddr = paddr;
+            //ASSERT(!"frame4");
+            //new_frame->paddr = paddr;
             new_frame->entry = vme;
+            ASSERT(!"frame1");
+            new_frame->entry = vme;
+            ASSERT(!"frame2");
         }
-        else palloc_free_page(paddr);
+        else
+        {
+            ASSERT(!"frame5");
+            palloc_free_page(paddr);
+        }
     }
     else
     {

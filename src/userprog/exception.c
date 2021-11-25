@@ -123,6 +123,11 @@ kill (struct intr_frame *f)
    can find more information about both of these in the
    description of "Interrupt 14--Page Fault Exception (#PF)" in
    [IA32-v3a] section 5.15 "Exception and Interrupt Reference". */
+
+static bool is_stack_access(int32_t fault_addr, uint32_t* esp)
+{
+   return fault_addr>=(esp-32) && find_vme(pg_round_down(fault_addr))==NULL && PHYS_BASE-pg_round_down(fault_addr)<=STACK_SIZE;
+}
 static void
 page_fault (struct intr_frame *f) 
 {
@@ -152,19 +157,26 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  if(!user || is_kernel_vaddr(fault_addr)) syscall_exit(-1);
+  //if(!user || is_kernel_vaddr(fault_addr)) syscall_exit(-1);
 
   if(fault_addr == NULL || !is_user_vaddr(fault_addr) ||!not_present) syscall_exit(-1);
 
-  if(fault_addr>=(f->esp-32) && find_vme(pg_round_down(fault_addr)) 
-  && PHYS_BASE<=STACK_SIZE+pg_round_down(fault_addr)) // stack access => stack growth
+  
+  if(is_stack_access(fault_addr, f->esp)) // stack access => stack growth
   {
-     if(vme_create(pg_round_down(page_fault), true, NULL, 0,0,0, false,true)==false)
+     //
+     if(vme_create(pg_round_down(fault_addr), true, NULL, 0,0,0, false,true)==false)
      {
         syscall_exit(-1);
      }
   }
-  if(vm_load(pg_round_down(page_fault))==false) syscall_exit(-1);
+  //ASSERT(!"page_fault2");
+  if(vm_load(pg_round_down(fault_addr))==false)
+  {
+     ASSERT(!"page_fault3");
+     syscall_exit(-1);
+  }
+  ASSERT(!"page_fault");
   return;
 }
 
