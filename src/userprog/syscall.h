@@ -3,9 +3,9 @@
 
 #include "threads/thread.h"
 #include "threads/synch.h"
-//#include "vm/page.h"
+#include "vm/page.h"
 #include "vm/frame.h"
-#include<debug.h>
+#include <debug.h>
 
 struct lock file_lock;
 

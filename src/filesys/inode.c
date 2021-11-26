@@ -214,9 +214,9 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       off_t inode_left = inode_length (inode) - offset;
       int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
       int min_left = inode_left < sector_left ? inode_left : sector_left;
-
       /* Number of bytes to actually copy out of this sector. */
       int chunk_size = size < min_left ? size : min_left;
+
       if (chunk_size <= 0)
         break;
 

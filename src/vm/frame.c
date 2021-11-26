@@ -38,17 +38,13 @@ struct frame* frame_allocate(struct vmentry* vme)
 {
     struct frame* new_frame=NULL;
     void* paddr;
-    printf("frame_allocate entered\n");
 
     lock_acquire(&frame_lock);
-    //ASSERT(!"frame2");
     if((paddr = palloc_get_page(PAL_USER)) != NULL)
     {
-        //ASSERT(!"frame3");
         new_frame = malloc(sizeof(struct frame));
         if(new_frame != NULL)
         {
-            //ASSERT(!"frame4");
             new_frame->paddr = paddr;
             new_frame->entry = vme;
         }

@@ -198,7 +198,6 @@ syscall_read(int fd, void* buffer, unsigned size)
   int bytes = 0;
   uint8_t* buffer_ptr = (uint8_t*)buffer;
   uint8_t byte;
-
   lock_acquire(&file_lock);
   if(fd == 0) // stdin
   {

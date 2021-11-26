@@ -6,6 +6,7 @@
 #include <list.h>
 #include <stdio.h>
 #include <hash.h>
+#include "filesys/off_t.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/synch.h"
@@ -27,7 +28,7 @@ struct vmentry
     struct file* file;
     struct list_elem mmap_elem;
 
-    size_t offset;
+    off_t offset;
     size_t read_bytes;
     size_t zero_bytes;
 

@@ -468,7 +468,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   return success;
 }
 
@@ -549,8 +548,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
     /* Calculate how to fill this page.
     We will read PAGE_READ_BYTES bytes from FILE
     and zero the final PAGE_ZERO_BYTES bytes. */
-    size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-    size_t page_zero_bytes = PGSIZE - page_read_bytes;
+    uint32_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+    uint32_t page_zero_bytes = PGSIZE - page_read_bytes;
     
     if(vme_create(upage, writable, file, ofs, page_read_bytes, page_zero_bytes, false, false)==false) return false;
 
