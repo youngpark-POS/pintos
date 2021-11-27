@@ -114,6 +114,7 @@ struct thread
     struct semaphore child_reap;
     struct hash vm;
     struct list mapping_list;
+    int max_mapid;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

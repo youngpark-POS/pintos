@@ -14,7 +14,6 @@
 
 
 static void syscall_handler (struct intr_frame *);
-static int max_mapid = 0;
 
 void
 validate_addr(void* addr)
@@ -44,6 +43,20 @@ validate_file(void* file, size_t size)
   for(;i < size;i++)
     validate_addr(ptr + i);
   validate_addr(ptr + i);
+}
+
+struct mapping*
+find_mapping(int mapid)
+{
+  struct mapping* map;
+  struct list_elem* e;
+  struct list* list = &thread_current()->mapping_list;
+  for(e = list_begin(list);e != list_end(list);e = list_next(e))
+  {
+    if(list_entry(e, struct mapping, elem)->mapid == mapid)
+      return list_entry(e, struct mapping, elem);
+  }
+  return NULL;
 }
 
 void
@@ -121,6 +134,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = syscall_tell(*(esp+1));      
       break;
     case SYS_CLOSE:
+      // ASSERT(!"syscall_close"); <- mmap unreached
       validate_addr(esp+1);
       syscall_close(*(esp+1));      
       break;
@@ -299,7 +313,7 @@ syscall_close(int fd)
   process_close_file(fd);
 }
 
-int 
+mapid_t 
 syscall_mmap(int fd, void* addr)
 {
   int len, ofs = 0;
@@ -307,27 +321,25 @@ syscall_mmap(int fd, void* addr)
   struct file* file;
   struct mapping* mapping;
   //ASSERT(!"mmap enter"); // <- unreached
-  lock_acquire(&file_lock);
-  if(!addr || !is_user_vaddr(addr) || pg_ofs(addr)) 
+  if(!addr || addr < 0x8048000 || addr > 0xc0000000 || pg_ofs(addr)) 
   {
-    lock_release(&file_lock);
     return -1;
   }
-
-  if((file = file_reopen(process_get_file(fd))) == NULL)
+  file = file_reopen(process_get_file(fd));
+  if(file == NULL)
   {
-    lock_release(&file_lock);
     return -1;
   }
   else
   {
-    lock_release(&file_lock);
     len = file_length(file);
   }
-  while(true)
+  while(len > 0)
   {
+    if(find_vme(addr))
+      return -1;
     read_bytes = len >= PGSIZE ? PGSIZE : len;
-    zero_bytes = len >= PGSIZE ? 0 : PGSIZE - len;
+    zero_bytes = read_bytes == PGSIZE ? 0 : PGSIZE - read_bytes;
     if(!vme_create(addr + ofs, true, file, ofs, read_bytes, zero_bytes, 
                    true, false))
     {
@@ -346,40 +358,24 @@ syscall_mmap(int fd, void* addr)
       len -= read_bytes;
       page_cnt++;
     }
-    if(len <= 0) break;
   }
   mapping = malloc(sizeof(struct mapping));
-  memset(mapping, 0, sizeof(struct mapping));
-  mapping->mapid = max_mapid++;
   mapping->addr = addr;
   mapping->file = file;
   mapping->page_num = page_cnt;
+  mapping->mapid = thread_current()->max_mapid;
+  (thread_current()->max_mapid)++;
   list_push_back(&thread_current()->mapping_list, &mapping->elem);
-  //printf("%d\n", mapping->mapid);
-  //ASSERT(!"mmap exit");
+  // ASSERT(mapping->mapid); //<= mapid = 0
   return mapping->mapid;
 }
 
 void
-syscall_munmap(int mapid)
+syscall_munmap(mapid_t mapid)
 {
   int i;
-  struct mapping* mapping = NULL, *target;
   struct vmentry* entry;
-  struct list_elem* e;
-  //ASSERT(!"munmap enter"); // <- reached
-  for(e = list_begin(&thread_current()->mapping_list);e != list_end(&thread_current()->mapping_list);
-      e = list_next(e))
-  {
-    target = list_entry(e, struct mapping, elem);
-    if(target->mapid == mapid)
-    {
-      mapping = target;
-      break;
-    }
-    // ASSERT(!"list_size not zero"); // <- reached
-  }
-  //ASSERT(mapping); // <- reached, mapping == NULL
+  struct mapping* mapping = find_mapping(mapid);
   if(!mapping) return;
   //ASSERT(!"found mapping"); // <- unreached
   lock_acquire(&file_lock);
@@ -388,6 +384,7 @@ syscall_munmap(int mapid)
     if((entry = find_vme(mapping->addr + i * PGSIZE)) == NULL) continue;
     if(entry->frame != NULL)
     {
+      ASSERT(!"syscall_unmap");
       if(pagedir_is_dirty(entry->thread->pagedir, entry->vaddr)) 
         file_write_at(mapping->file, entry->vaddr, PGSIZE, PGSIZE * i);
       frame_deallocate(entry->frame);

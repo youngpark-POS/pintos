@@ -115,7 +115,7 @@ bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
                 newone->frame=NULL;
                 newone->thread=thread_current();
             }
-           if(insert_vme(&thread_current()->vm, newone)==false) ASSERT(!"MM2");
+           insert_vme(&thread_current()->vm, newone);
            return true;
         }
     }

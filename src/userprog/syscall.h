@@ -8,10 +8,11 @@
 #include <debug.h>
 
 struct lock file_lock;
+typedef int mapid_t;
 
 struct mapping
 {
-    int mapid;
+    mapid_t mapid;
     void* addr;
     struct file* file;
     struct list_elem elem;

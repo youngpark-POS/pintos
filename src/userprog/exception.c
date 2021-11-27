@@ -159,7 +159,8 @@ page_fault (struct intr_frame *f)
 
   //if(!user || is_kernel_vaddr(fault_addr)) syscall_exit(-1);
 
-  if(fault_addr == NULL || !is_user_vaddr(fault_addr) ||!not_present) syscall_exit(-1);
+  if(fault_addr == NULL || fault_addr < 0x8048000 ||
+     fault_addr > PHYS_BASE ||!not_present) syscall_exit(-1);
 
   
   if(is_stack_access(fault_addr, f->esp)) // stack access => stack growth

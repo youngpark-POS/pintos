@@ -100,7 +100,6 @@ struct frame* frame_evict(void)
     bool success = true;
     int swap_num;
 
-    printf("frame_evict entered\n");
     // find victim frame
     while(true)
     {
