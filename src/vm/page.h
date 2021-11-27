@@ -42,7 +42,7 @@ struct vmentry
 void vm_init(struct hash *vm);
 void vm_destroy(struct hash *vm);
 
-struct vmentry* fine_vme(void *vaddr);
+struct vmentry* find_vme(void *vaddr);
 bool insert_vme(struct hash* vm, struct vmentry * vme);
 bool delete_vme(struct hash* vm, struct vmentry * vme);
 
