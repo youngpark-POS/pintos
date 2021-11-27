@@ -313,6 +313,14 @@ syscall_close(int fd)
   process_close_file(fd);
 }
 
+void mmap_file_write_at(struct file* file, void* addr, uint32_t read_bytes, off_t ofs)
+{
+  ASSERT(file != NULL);
+  lock_acquire(&file_lock);
+  file_write_at(file, addr, read_bytes, ofs);
+  lock_release(&file_lock);
+}
+
 mapid_t 
 syscall_mmap(int fd, void* addr)
 {
@@ -320,19 +328,23 @@ syscall_mmap(int fd, void* addr)
   int page_cnt = 0, read_bytes = 0, zero_bytes = 0;
   struct file* file;
   struct mapping* mapping;
+  int i;
   //ASSERT(!"mmap enter"); // <- unreached
   if(!addr || addr < 0x8048000 || addr > 0xc0000000 || pg_ofs(addr)) 
   {
     return -1;
   }
+  lock_acquire(&file_lock);
   file = file_reopen(process_get_file(fd));
   if(file == NULL)
   {
+    lock_release(&file_lock);
     return -1;
   }
   else
   {
     len = file_length(file);
+    lock_release(&file_lock);
   }
   while(len > 0)
   {
@@ -343,11 +355,9 @@ syscall_mmap(int fd, void* addr)
     if(!vme_create(addr + ofs, true, file, ofs, read_bytes, zero_bytes, 
                    true, false))
     {
-      while(ofs > 0)
+      for(i=0; i<ofs; i=i+PGSIZE)
       {
-        delete_vme(&find_vme(addr + ofs - PGSIZE)->thread->vm, 
-                   find_vme(addr + ofs - PGSIZE));
-        ofs -= PGSIZE;
+        delete_vme_add(pg_round_down(addr + i));
       }
       file_close(file);
       return -1;
@@ -375,26 +385,43 @@ syscall_munmap(mapid_t mapid)
 {
   int i;
   struct vmentry* entry;
-  struct mapping* mapping = find_mapping(mapid);
-  if(!mapping) return;
+  struct mapping* mapping = NULL;
+  struct list* list=&thread_current()->mapping_list;
+  struct list_elem* e;
+  struct mapping* candidate;
+  for(e=list_begin(list); e!=list_end(list); e=list_next(e))
+  {
+    candidate=list_entry(e, struct mapping, elem);
+    if(candidate->mapid == mapid)
+    {
+      mapping=candidate;
+      break;
+    }
+  }
+  if(mapping==NULL) return;
   //ASSERT(!"found mapping"); // <- unreached
   lock_acquire(&file_lock);
-  for(i = 0;i < mapping->page_num;i++)
+  for(i = 0; i<mapping->page_num; i++)
   {
-    if((entry = find_vme(mapping->addr + i * PGSIZE)) == NULL) continue;
+    entry=find_vme(mapping->addr + i*PGSIZE);
+    if(entry  == NULL) continue;
     if(entry->frame != NULL)
     {
-      ASSERT(!"syscall_unmap");
+      //ASSERT(!"syscall_unmap");
       if(pagedir_is_dirty(entry->thread->pagedir, entry->vaddr)) 
         file_write_at(mapping->file, entry->vaddr, PGSIZE, PGSIZE * i);
-      frame_deallocate(entry->frame);
+      frame_destroy(entry->frame);
     }
     pagedir_clear_page(entry->thread->pagedir);
-    delete_vme(&entry->thread->vm, entry);
+    hash_delete(&entry->thread->vm, &entry->elem);
   }
   list_remove(&mapping->elem);
   file_close(mapping->file);
   free(mapping);
   lock_release(&file_lock);
   //ASSERT(!"unmapped"); // <- unreached
+}
+struct lock* get_file_lock(void)
+{
+  return &file_lock;
 }

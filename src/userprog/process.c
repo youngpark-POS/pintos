@@ -367,6 +367,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
+  struct lock *file_lock=get_file_lock();
   off_t file_ofs;
   bool success = false;
   int i;
@@ -378,6 +379,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  lock_acquire(file_lock);
   file = filesys_open (file_name);
   if (file == NULL) 
     {
@@ -468,6 +470,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
+  lock_release(file_lock);
   return success;
 }
 

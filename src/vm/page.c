@@ -75,6 +75,16 @@ bool delete_vme(struct hash* vm, struct vmentry * vme)
     return true;
 }
 
+bool delete_vme_add(void* upage)
+{
+    struct vmentry* p = find_vme(upage);
+    if(p->frame != NULL) frame_destroy(p->frame);
+
+    if(p->swap_slot != BITMAP_ERROR) swap_remove(p->swap_slot);
+    free(p);
+    return true;
+}
+
 bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
     size_t read_bytes, size_t zero_bytes, bool ismap, bool isstack)
 {
@@ -165,7 +175,7 @@ bool vm_load(void *vaddr)
         }
         if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->paddr, page->writable))
         {
-               page->frame=new_frame;
+            page->frame=new_frame;   
         }
         else if(page->is_loaded)
         {
@@ -176,7 +186,8 @@ bool vm_load(void *vaddr)
     }
     else if(page->type==PAGE_SWAP)
     {
-        page->is_loaded=swap_in(new_frame->paddr, page->swap_slot);
+        if(swap_in(new_frame->paddr, page->swap_slot)==-1) page->is_loaded=false;
+        else page->is_loaded=true;
         page->type=page->pretype;
         if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->paddr, page->writable))
         {

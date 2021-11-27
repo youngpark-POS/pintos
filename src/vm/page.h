@@ -45,7 +45,7 @@ void vm_destroy(struct hash *vm);
 struct vmentry* find_vme(void *vaddr);
 bool insert_vme(struct hash* vm, struct vmentry * vme);
 bool delete_vme(struct hash* vm, struct vmentry * vme);
-
+bool delete_vme_add(void* upage);
 bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
                 size_t read_bytes, size_t zero_bytes, bool ismap, bool isstack);
 bool vm_load(void *vaddr);

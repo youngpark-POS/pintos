@@ -14,7 +14,10 @@ bool is_tail (struct list_elem *elem)
 {
   return elem != NULL && elem->prev != NULL && elem->next == NULL;
 }
-
+bool is_back (struct list_elem* elem)
+{
+    return list_back(&frame_list)==elem;
+}
 uint32_t* frame_to_pagedir(struct frame* f)
 {
     return f->entry->thread->pagedir;
@@ -22,9 +25,9 @@ uint32_t* frame_to_pagedir(struct frame* f)
 
 void frame_push_back(struct frame* f)
 {
-    lock_acquire(&frame_lock);
+    //lock_acquire(&frame_lock);
     list_push_back(&frame_list, &f->ptable_elem);
-    lock_release(&frame_lock);
+    //lock_release(&frame_lock);
 }
 
 void frame_init(void)
@@ -40,7 +43,8 @@ struct frame* frame_allocate(struct vmentry* vme)
     void* paddr;
 
     lock_acquire(&frame_lock);
-    if((paddr = palloc_get_page(PAL_USER)) != NULL)
+    paddr = palloc_get_page(PAL_USER);
+    if(paddr != NULL)
     {
         new_frame = malloc(sizeof(struct frame));
         if(new_frame != NULL)
@@ -55,11 +59,12 @@ struct frame* frame_allocate(struct vmentry* vme)
     }
     else
     {
+        
         new_frame = frame_evict();
-
+        //ASSERT(!"come");
         new_frame->entry = vme;
     }
-    list_push_back(&frame_list, &new_frame->ptable_elem);
+    //list_push_back(&frame_list, &new_frame->ptable_elem);
     lock_release(&frame_lock);
     return new_frame;
 }
@@ -92,47 +97,57 @@ bool frame_is_dirty(struct frame* f)
     return pagedir_is_dirty(frame_to_pagedir(f), f->paddr) ||
            pagedir_is_dirty(frame_to_pagedir(f), f->entry->vaddr);
 }
-
+uint32_t * get_pagedir(struct frame* frame)
+{
+    return frame->entry->thread->pagedir;
+}
 struct frame* frame_evict(void)
 {
+    ASSERT(lock_held_by_current_thread(&frame_lock));
     struct frame* target;
     struct vmentry* entry;
+    struct list_elem* next_elem;
     bool success = true;
     int swap_num;
-
+    //ASSERT(!"file");
     // find victim frame
-    while(true)
+    
+    if(is_tail(clock_pointer) || is_back(clock_pointer)) next_elem = list_front(&frame_list);
+    else next_elem = list_next(clock_pointer);
+    clock_pointer=next_elem;
+    target=list_entry(next_elem, struct frame, ptable_elem);
+    while(pagedir_is_accessed(get_pagedir(target), target->entry->vaddr))
     {
-        target = list_entry(clock_pointer, struct frame, ptable_elem);
-        if(pagedir_is_accessed(frame_to_pagedir(target), target->entry->vaddr))
-        {
-            pagedir_set_accessed(frame_to_pagedir(target), target->entry->vaddr, false);
-            if(is_tail(clock_pointer) || is_tail(list_next(clock_pointer))) //== list_tail(&frame_list) || ==list_tail(&frame_list))
-                clock_pointer = list_front(&frame_list);
-            else 
-                clock_pointer = list_next(clock_pointer);
-        }
-        else break;
+        pagedir_set_accessed(get_pagedir(target), target->entry->vaddr, false);
+        if(is_tail(clock_pointer) || is_back(clock_pointer)) //== list_tail(&frame_list) || ==list_tail(&frame_list))
+            next_elem = list_front(&frame_list);
+        else 
+            next_elem = list_next(clock_pointer);
+        clock_pointer=next_elem;
+        target=list_entry(next_elem, struct frame, ptable_elem);
     }
+
+    //ASSERT(lock_held_by_current_thread(&frame_lock));
+    //ASSERT(!"file");
     entry = target->entry;
     entry->pretype = entry->type;
     switch(entry->type)
     {
     case PAGE_ZERO:
-        success = swap_num = swap_out(target->paddr);
-        if(!success) return NULL;
+        swap_num = swap_out(target->paddr);
+        if(swap_num == BITMAP_ERROR) return NULL;
         entry->type=PAGE_SWAP;
         entry->swap_slot=swap_num;
         break;
     case PAGE_MAPP:
         if(frame_is_dirty(target))
-            file_write_at(entry->file, target->paddr, entry->read_bytes, entry->offset);
+            mmap_file_write_at(entry->file, target->paddr, entry->read_bytes, entry->offset);
         break;
     case PAGE_FILE:
         if(entry->writable && frame_is_dirty(target)) 
         {
-            success = swap_num = swap_out(target->paddr);
-            if(!success) return NULL;
+            swap_num = swap_out(target->paddr);
+            if(swap_num == BITMAP_ERROR) return NULL;
             entry->type = PAGE_SWAP;
             entry->swap_slot = swap_num;
         }

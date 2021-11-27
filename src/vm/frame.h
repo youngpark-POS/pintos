@@ -27,4 +27,5 @@ void frame_push_back(struct frame*);
 bool is_tail (struct list_elem *);
 uint32_t* frame_to_pagedir(struct frame* );
 struct frame* frame_evict(void);
+uint32_t * get_pagedir(struct frame* frame);
 #endif
