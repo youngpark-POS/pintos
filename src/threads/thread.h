@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
+#include "filesys/file.h"
 #include <hash.h>
 
 
@@ -116,7 +117,7 @@ struct thread
     uint32_t *pagedir;         /* Page directory. */
     struct process *pcb;       /* Process control block. */
     struct list children;      /* List of children processes. */
-    struct list fdt;           /* List of file descriptor entries. */
+    struct file* fd_table[FD_MAX];
     int next_fd;               /* File descriptor for next file. */
     struct file *running_file; /* Currently running file. */
 #endif

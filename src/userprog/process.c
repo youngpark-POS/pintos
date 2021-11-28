@@ -265,21 +265,24 @@ void process_remove_child(struct process *child)
         palloc_free_page(child);
 }
 
-/* Returns the current process's file descriptor entry with fd FD. */
-struct file_descriptor_entry *process_get_fde(int fd)
+struct file* process_get_file(int fd)
 {
-    struct list *fdt = thread_get_fdt();
-    struct list_elem *e;
+    if(fd < 2 || fd >= FD_MAX) return NULL;
+    return thread_current()->fd_table[fd];
+}
 
-    for (e = list_begin(fdt); e != list_end(fdt); e = list_next(e))
+int process_add_file(struct file* f)
+{
+    struct thread* cur = thread_current();
+    for(int i = 2;i < FD_MAX;i++)
     {
-        struct file_descriptor_entry *fde = list_entry(e, struct file_descriptor_entry, fdtelem);
-
-        if (fde->fd == fd)
-            return fde;
+        if(cur->fd_table[i] == NULL)
+        {
+            cur->fd_table[i] = f;
+            return i;
+        }
     }
-
-    return NULL;
+    return -1;
 }
 
 /* We load ELF binaries.  The following definitions are taken

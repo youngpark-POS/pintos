@@ -14,7 +14,7 @@ static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
-static bool is_stack_access(int32_t addr, uint32_t* esp);
+bool is_stack_access(int32_t* addr, uint32_t* esp);
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -182,8 +182,8 @@ page_fault(struct intr_frame *f)
     kill(f);
 }
 
-static bool
-is_stack_access(int32_t fault_addr, uint32_t* esp)
+bool
+is_stack_access(int32_t* fault_addr, uint32_t* esp)
 {
     return fault_addr >= (esp - 32) && 
             (PHYS_BASE - pg_round_down(fault_addr)) <= STACK_SIZE && 

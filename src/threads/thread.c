@@ -467,8 +467,9 @@ init_thread(struct thread *t, const char *name, int priority)
 #ifdef USERPROG
     t->pcb = NULL;
     list_init(&t->children);
-    list_init(&t->fdt);
     t->next_fd = 2;
+    for(int i = 0;i < FD_MAX;i++)
+      t->fd_table[i] = NULL;
 #endif
     list_init(&t->mapping_list);
     t->pages = NULL;
@@ -623,12 +624,6 @@ struct process *thread_get_pcb(void)
 struct list *thread_get_children(void)
 {
     return &thread_current()->children;
-}
-
-/* Returns the current thread's fdt. */
-struct list *thread_get_fdt(void)
-{
-    return &thread_current()->fdt;
 }
 
 /* Returns the current thread's next_fd and increments
