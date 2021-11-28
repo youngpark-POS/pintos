@@ -1,160 +1,204 @@
-#include "threads/vaddr.h"
-#include "threads/thread.h"
+#include "vm/frame.h"
+#include <stdio.h>
+#include <list.h>
+#include <bitmap.h>
+#include "vm/page.h"
+#include "vm/swap.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/synch.h"
-#include "vm/frame.h"
-#include "vm/swap.h"
+#include "threads/vaddr.h"
+#include "threads/thread.h"
 #include "userprog/pagedir.h"
-#include "filesys/file.h"
-#include <list.h>
-#include <string.h>
+#include "userprog/syscall.h"
 
-bool is_tail (struct list_elem *elem)
+static struct list frames;
+
+static struct lock frames_lock;
+
+static struct list_elem* frame_clock_points;
+
+static inline bool
+is_tail(struct list_elem *elem)
 {
-  return elem != NULL && elem->prev != NULL && elem->next == NULL;
-}
-bool is_back (struct list_elem* elem)
-{
-    return list_back(&frame_list)==elem;
-}
-uint32_t* frame_to_pagedir(struct frame* f)
-{
-    return f->entry->thread->pagedir;
+    return elem != NULL && elem->prev != NULL && elem->next == NULL;
 }
 
-void frame_push_back(struct frame* f)
+static inline bool
+is_back(struct list_elem *elem)
 {
-    //lock_acquire(&frame_lock);
-    list_push_back(&frame_list, &f->ptable_elem);
-    //lock_release(&frame_lock);
+    return list_back(&frames) == elem;
 }
 
-void frame_init(void)
+static inline bool
+is_dirty(struct frame* frame)
 {
-    list_init(&frame_list);
-    lock_init(&frame_lock);
-    clock_pointer = list_tail(&frame_list);
+    return pagedir_is_dirty(get_pagedir_of_frame(frame), frame->page->upage)
+    || pagedir_is_dirty(get_pagedir_of_frame(frame), frame->kpage);
 }
 
-struct frame* frame_allocate(struct vmentry* vme)
+void
+frame_init (void)
 {
-    struct frame* new_frame=NULL;
-    void* paddr;
+    lock_init(&frames_lock);
+    list_init(&frames);
+    frame_clock_points = list_tail(&frames);
+}
 
-    lock_acquire(&frame_lock);
-    paddr = palloc_get_page(PAL_USER);
-    if(paddr != NULL)
+/* Allocate frame, and register page with given page
+    If no free space, evict and allocate. 
+    If failed to allocate,  return NULL
+    Otherwise, return allocated frame */
+struct frame*
+frame_allocate(struct page* page)
+{
+    lock_acquire(&frames_lock);
+
+    struct frame* new_frame = NULL;
+    void* kpage = palloc_get_page(PAL_USER);
+    if(kpage == NULL) //No free page, eviction needs
+        new_frame = frame_evict_and_reassign(page);
+    else
     {
         new_frame = malloc(sizeof(struct frame));
-        if(new_frame != NULL)
+
+        if(new_frame == NULL) 
         {
-            new_frame->paddr = paddr;
-            new_frame->entry = vme;
+            palloc_free_page(kpage);
         }
         else
         {
-            palloc_free_page(paddr);
+            new_frame->kpage = kpage;
+            new_frame->page = page;
         }
     }
-    else
-    {
-        
-        new_frame = frame_evict();
-        //ASSERT(!"come");
-        new_frame->entry = vme;
-    }
-    //list_push_back(&frame_list, &new_frame->ptable_elem);
-    lock_release(&frame_lock);
+
+    lock_release(&frames_lock);
     return new_frame;
 }
 
-bool frame_destroy(struct frame* f)
+struct frame*
+frame_evict_and_reassign(struct page* page)
 {
-    lock_acquire(&frame_lock);
-    if(clock_pointer == &f->ptable_elem)
-        clock_pointer = list_next(clock_pointer);
+    ASSERT (lock_held_by_current_thread (&frames_lock));
+    struct frame* frame = frame_to_evict();
+    if(frame == NULL) return NULL;
     
-    list_remove(&f->ptable_elem);
-    palloc_free_page(f->paddr);
-    free(f);
-    lock_release(&frame_lock);
+    if(!frame_evict(frame)) return NULL;
+    frame_page_reassign_and_remove_list(frame, page);
+    return frame;
 }
 
-bool frame_deallocate(struct frame* f)
-{
-    lock_acquire(&frame_lock);
-    if(clock_pointer == &f->ptable_elem)
-        clock_pointer = list_next(clock_pointer);
-    
-    list_remove(&f->ptable_elem);
-    free(f);
-    lock_release(&frame_lock);
-}
 
-bool frame_is_dirty(struct frame* f)
+bool
+frame_evict(struct frame* frame)
 {
-    return pagedir_is_dirty(frame_to_pagedir(f), f->paddr) ||
-           pagedir_is_dirty(frame_to_pagedir(f), f->entry->vaddr);
-}
-uint32_t * get_pagedir(struct frame* frame)
-{
-    return frame->entry->thread->pagedir;
-}
-struct frame* frame_evict(void)
-{
-    ASSERT(lock_held_by_current_thread(&frame_lock));
-    struct frame* target;
-    struct vmentry* entry;
-    struct list_elem* next_elem;
-    bool success = true;
-    int swap_num;
-    //ASSERT(!"file");
-    // find victim frame
-    
-    if(is_tail(clock_pointer) || is_back(clock_pointer)) next_elem = list_front(&frame_list);
-    else next_elem = list_next(clock_pointer);
-    clock_pointer=next_elem;
-    target=list_entry(next_elem, struct frame, ptable_elem);
-    while(pagedir_is_accessed(get_pagedir(target), target->entry->vaddr))
-    {
-        pagedir_set_accessed(get_pagedir(target), target->entry->vaddr, false);
-        if(is_tail(clock_pointer) || is_back(clock_pointer)) //== list_tail(&frame_list) || ==list_tail(&frame_list))
-            next_elem = list_front(&frame_list);
-        else 
-            next_elem = list_next(clock_pointer);
-        clock_pointer=next_elem;
-        target=list_entry(next_elem, struct frame, ptable_elem);
-    }
+    ASSERT (lock_held_by_current_thread (&frames_lock));
 
-    //ASSERT(lock_held_by_current_thread(&frame_lock));
-    //ASSERT(!"file");
-    entry = target->entry;
-    entry->pretype = entry->type;
-    switch(entry->type)
+    struct page* page = frame->page;
+    bool dirty = is_dirty(frame);
+
+    page->prev_type = page->type;
+    switch (page->type)
     {
     case PAGE_ZERO:
-        swap_num = swap_out(target->paddr);
-        if(swap_num == BITMAP_ERROR) return NULL;
-        entry->type=PAGE_SWAP;
-        entry->swap_slot=swap_num;
+        if(!swap_frame(page, frame)) return false;
         break;
-    case PAGE_MAPP:
-        if(frame_is_dirty(target))
-            mmap_file_write_at(entry->file, target->paddr, entry->read_bytes, entry->offset);
+    
+    case PAGE_MMAP:
+        if(dirty)
+            mmap_file_write_at(page->file, frame->kpage, page->read_bytes, page->ofs);
         break;
+    
     case PAGE_FILE:
-        if(entry->writable && frame_is_dirty(target)) 
-        {
-            swap_num = swap_out(target->paddr);
-            if(swap_num == BITMAP_ERROR) return NULL;
-            entry->type = PAGE_SWAP;
-            entry->swap_slot = swap_num;
-        }
+        if(page->writable && dirty)
+            if(!swap_frame(page, frame)) return false;
+        break;
+
+    default:
+        NOT_REACHED();
         break;
     }
-    entry->frame = NULL;
-    list_remove(&target->ptable_elem);
-    pagedir_clear_page(target->entry->thread->pagedir, entry->vaddr);
-    return target;
+
+    page->frame = NULL;
+    pagedir_clear_page(get_pagedir_of_frame(frame), page->upage);
+    return true;
+}
+
+/* CLock Algorithm */
+struct frame*
+frame_to_evict(void) 
+{
+    ASSERT (lock_held_by_current_thread (&frames_lock));
+
+    struct frame* frame = frame_clock_forward();
+    while(pagedir_is_accessed (get_pagedir_of_frame(frame), frame->page->upage))
+    {
+        pagedir_set_accessed (get_pagedir_of_frame(frame), frame->page->upage, false);
+        frame = frame_clock_forward();
+    }
+
+    return frame;
+}
+
+struct frame*
+frame_clock_forward(void)
+{
+    ASSERT (lock_held_by_current_thread (&frames_lock));
+
+    struct list_elem* next_elem;
+    if(is_tail(frame_clock_points) || is_back(frame_clock_points)) next_elem = list_front(&frames);
+    else next_elem = list_next(frame_clock_points);
+
+    frame_clock_points = next_elem;
+    return list_entry (next_elem, struct frame, elem);
+}
+
+bool
+swap_frame(struct page* page, struct frame* frame)
+{
+    page->swap_index = swap_out(frame->kpage);
+    if(page->swap_index == BITMAP_ERROR) 
+        return false;
+    else
+        page->type = PAGE_SWAP;
+    
+    return true;
+}
+
+void
+frame_page_reassign_and_remove_list(struct frame* frame, struct page* page)
+{
+    frame->page = page;
+    list_remove(&frame->elem);
+}
+
+void
+frame_remove(struct frame* frame_to_remove, bool is_free_page)
+{
+    lock_acquire(&frames_lock);
+    ASSERT(frame_to_remove != NULL);
+
+    if(frame_clock_points == &frame_to_remove->elem) 
+        frame_clock_points = list_next(frame_clock_points);
+
+    if(is_free_page) 
+        palloc_free_page(frame_to_remove->kpage);
+    
+    list_remove(&frame_to_remove->elem);
+    free(frame_to_remove);
+
+    lock_release(&frames_lock);
+}
+
+void
+frame_push_back(struct frame* frame)
+{
+    list_push_back (&frames, &frame->elem);
+}
+
+uint32_t *
+get_pagedir_of_frame(struct frame* frame)
+{
+    return frame->page->thread->pagedir;
 }

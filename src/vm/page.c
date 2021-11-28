@@ -1,205 +1,186 @@
-#include "page.h"
-#include "threads/vaddr.h"
-#include "threads/thread.h"
-#include "threads/malloc.h"
+#include "vm/page.h"
+#include <hash.h>
+#include <stdio.h>
+#include <bitmap.h>
 #include "vm/frame.h"
 #include "vm/swap.h"
+#include "threads/thread.h"
 #include "userprog/pagedir.h"
+#include "threads/vaddr.h"
 #include "filesys/file.h"
-#include "filesys/off_t.h"
-#include <string.h>
 
-static unsigned
-vm_hash_func(const struct hash_elem *e, void *aux UNUSED)
+bool
+page_create_with_file(
+    void* upage, struct file* file, off_t ofs, uint32_t read_bytes, 
+    uint32_t zero_bytes, bool writable, bool is_mmap)
 {
-    ASSERT(e!=NULL);
-    return hash_int(hash_entry(e, struct vmentry, elem)->vaddr);
+    if(page_find_by_upage(upage) != NULL)
+        return false;
+
+    struct page* new_page = malloc(sizeof(struct page));
+    if(new_page != NULL)
+    {
+        new_page->upage = upage;
+        new_page->file = file;
+        new_page->ofs = ofs;
+        new_page->read_bytes = read_bytes;
+        new_page->zero_bytes = zero_bytes;
+        new_page->writable = writable;
+        new_page->swap_index = BITMAP_ERROR;
+        new_page->thread = thread_current();
+        new_page->frame = NULL;
+        new_page->type = is_mmap ? PAGE_MMAP : PAGE_FILE;
+
+        hash_insert(thread_current()->pages, &new_page->elem);
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
-static bool vm_less_func(const struct hash_elem *x, const struct hash_elem *y, void* aux UNUSED)
+bool
+page_create_with_zero(void *upage)
 {
-    ASSERT(x!=NULL && y!=NULL);
-    if(hash_entry(x,struct vmentry, elem)->vaddr < hash_entry(y,struct vmentry, elem)->vaddr) return true;
-    else return false;
+    if(page_find_by_upage(upage) != NULL)
+        return false;
+
+    struct page* new_page = malloc(sizeof(struct page));    
+    if(new_page != NULL)
+    {
+        new_page->upage = upage;
+        new_page->file = NULL;
+        new_page->ofs = 0;
+        new_page->read_bytes = 0;
+        new_page->zero_bytes = PGSIZE;
+        new_page->writable = true;
+        new_page->swap_index = BITMAP_ERROR;
+        new_page->thread = thread_current();
+        new_page->frame = NULL;
+        new_page->type = PAGE_ZERO;
+
+        hash_insert(thread_current()->pages, &new_page->elem);
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
-static void vm_destroy_func(struct hash_elem *e, void* aux UNUSED)
+bool
+page_load(void *upage)
 {
-    ASSERT(e!=NULL);
-    struct vmentry *vme;
-    vme=hash_entry(e, struct vmentry, elem);
-    if(vme->frame != NULL) frame_deallocate(vme->frame);
-    if(vme->swap_slot!=BITMAP_ERROR) swap_remove(vme->swap_slot);
-    free(vme);
-}
+    struct page* page_to_load = page_find_by_upage(upage);
+    if (page_to_load == NULL || page_to_load->frame != NULL)
+        return false;
+    
+    struct frame* new_frame = frame_allocate(page_to_load);
+    if(new_frame == NULL)
+        return false;
+    
+    bool success;
+    switch (page_to_load->type)
+    {
+    case PAGE_SWAP:
+        page_to_load->type = page_to_load->prev_type;
+        success = swap_in(new_frame->kpage, page_to_load->swap_index);
+        break;
+    
+    case PAGE_FILE:
+    case PAGE_MMAP:
+        success = page_load_with_file(new_frame, page_to_load);
+        break;
+    
+    case PAGE_ZERO:
+        success = memset(new_frame->kpage, 0, PGSIZE) != NULL;
+        break;
 
-void vm_init(struct hash *vm)
-{
-    ASSERT(vm!=NULL);
-    hash_init(vm,vm_hash_func,vm_less_func,NULL);
-}
+    default:
+        NOT_REACHED();
+        break;
+    }
+    
+    if(!success || !pagedir_set_page(thread_current ()->pagedir, upage, new_frame->kpage, page_to_load->writable))
+    {
+        frame_remove(new_frame, true);
+        return false;
+    }
 
-void vm_destroy(struct hash *vm)
-{
-    ASSERT(vm!=NULL);
-    hash_destroy(vm,vm_destroy_func);
-}
-
-struct vmentry* find_vme(void *vaddr)
-{
-    struct hash *vm=&thread_current()->vm;
-    struct vmentry vme;
-    struct hash_elem *elem;
-    vme.vaddr=pg_round_down(vaddr);
-    ASSERT(pg_ofs (vme.vaddr)==0);
-    elem=hash_find(vm,&vme.elem);
-    return elem ? hash_entry(elem, struct vmentry, elem) : NULL;
-}
-
-bool insert_vme(struct hash* vm, struct vmentry * vme)
-{
-    ASSERT(vm!=NULL && vme!=NULL);
-    ASSERT(pg_ofs(vme->vaddr)==0);
-    if(hash_insert(vm,&vme->elem)==NULL) return true;
-    else return false;
-}
-
-bool delete_vme(struct hash* vm, struct vmentry * vme)
-{
-    ASSERT(vm!=NULL && vme!=NULL);
-    ASSERT(pg_ofs(vme->vaddr)==0);
-    if(!hash_delete(vm,&vme->elem)) return false;
-    if(vme->frame != NULL) frame_deallocate(vme->frame);
-    if(vme->swap_slot!=BITMAP_ERROR) swap_remove(vme->swap_slot);
-    free(vme);
+    page_to_load->frame = new_frame;
+    frame_push_back(page_to_load->frame); //After init, push
     return true;
 }
 
-bool delete_vme_add(void* upage)
+bool
+page_load_with_file(struct frame* f,struct page* p)
 {
-    struct vmentry* p = find_vme(upage);
-    if(p->frame != NULL) frame_destroy(p->frame);
+    if (file_read_at(p->file, f->kpage, p->read_bytes, p->ofs) != (int) p->read_bytes)
+    {
+        frame_remove(f, true);
+        return false;
+    }
+    memset(f->kpage + p->read_bytes, 0, p->zero_bytes);
+    return true;
+}
 
-    if(p->swap_slot != BITMAP_ERROR) swap_remove(p->swap_slot);
+void
+page_exit(void)
+{
+    struct hash* h = thread_current()->pages;
+    if(h != NULL)
+        hash_destroy(h, page_destory);
+}
+
+void
+page_destory (struct hash_elem *e, void *aux UNUSED)
+{
+    struct page* p = hash_entry(e, struct page, elem);
+    if(p->frame)
+        frame_remove(p->frame, false);
+    if(p->swap_index != BITMAP_ERROR) 
+        swap_remove(p->swap_index);
     free(p);
-    return true;
 }
 
-bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
-    size_t read_bytes, size_t zero_bytes, bool ismap, bool isstack)
+struct page*
+page_find_by_upage(void* upage)
 {
-    struct vmentry* newone;
-    if(find_vme(vaddr)==NULL)
-    {
-        newone=malloc(sizeof(struct vmentry));
-        if(newone==NULL)
-        {
-            return false;
-        }
-        else
-        {
-            if(isstack==true)
-            {
-                newone->vaddr=vaddr;
-                newone->file=NULL;
-                newone->writable=true;
-                newone->read_bytes=0;
-                newone->zero_bytes=0;
-                newone->offset=0;
-                newone->swap_slot=BITMAP_ERROR;
-                newone->type=PAGE_ZERO;
-                newone->frame=NULL;
-                newone->thread=thread_current();
-            }
-            else
-            {
-                newone->vaddr=vaddr;
-                newone->file=file;
-                newone->writable=writable;
-                newone->read_bytes=read_bytes;
-                newone->zero_bytes=zero_bytes;
-                newone->offset=offset;
-                newone->swap_slot=BITMAP_ERROR;
-                if(ismap==true) newone->type=PAGE_MAPP;
-                else newone->type=PAGE_FILE;
-                newone->frame=NULL;
-                newone->thread=thread_current();
-            }
-           insert_vme(&thread_current()->vm, newone);
-           return true;
-        }
-    }
-    else return false;
+    struct page page_to_find;
+    struct hash_elem *e;
+
+    page_to_find.upage = upage;
+    e = hash_find (thread_current()->pages, &page_to_find.elem);
+    if(e != NULL)
+        return hash_entry(e, struct page, elem);
+    else
+        return NULL;
 }
 
-bool vm_load(void *vaddr)
+void
+page_destory_by_upage (void* upage, bool is_free_page)
 {
-    struct vmentry* page;
-    struct frame* new_frame;
-    page=find_vme(vaddr);
-    if(page->frame!=NULL || page==NULL)
-    {
-        return false;
-    }
-    new_frame=frame_allocate(page);
-    if(new_frame==NULL)
-    {
-        return false;
-    }
-    if(page->type==PAGE_ZERO)
-    {
-        if(memset(new_frame->paddr,0,PGSIZE)!=NULL) page->is_loaded=true;
-        if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->paddr, page->writable))
-        {
-            page->frame=new_frame;
-        }
-        else
-        {
-            frame_destroy(new_frame);
-            page->is_loaded=false;
-            return false;
-        }
-    }
-    else if(page->type==PAGE_FILE || page->type==PAGE_MAPP)
-    {
-        int readlen = file_read_at(page->file, new_frame->paddr, (off_t)page->read_bytes, page->offset);
-        if(readlen != (off_t) page->read_bytes)
-        {
-            frame_destroy(new_frame);
-            return false;
-        }
-        else
-        {
-            memset(new_frame->paddr + page->read_bytes, 0, page->zero_bytes);
-            page->is_loaded=true;
-        }
-        if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->paddr, page->writable))
-        {
-            page->frame=new_frame;   
-        }
-        else if(page->is_loaded)
-        {
-            frame_destroy(new_frame);
-            page->is_loaded=false;
-            return false;
-        }
-    }
-    else if(page->type==PAGE_SWAP)
-    {
-        if(swap_in(new_frame->paddr, page->swap_slot)==-1) page->is_loaded=false;
-        else page->is_loaded=true;
-        page->type=page->pretype;
-        if(page->is_loaded && pagedir_set_page(thread_current()->pagedir, vaddr, new_frame->paddr, page->writable))
-        {
-            page->frame=new_frame;
-        }
-        else
-        {
-            frame_destroy(new_frame);
-            page->is_loaded=false;
-            return false;
-        }
-    }
-    frame_push_back(page->frame);
-    return true;
+    struct page* p = page_find_by_upage(upage);
+    if(p->frame)
+        frame_remove(p->frame, is_free_page);
+    if(p->swap_index != BITMAP_ERROR) 
+        swap_remove(p->swap_index);
+    free(p);
+}
+
+unsigned
+page_hash_func (const struct hash_elem *e, void *aux UNUSED)
+{
+  const struct page *p = hash_entry (e, struct page, elem);
+  return hash_bytes (&p->upage, sizeof p->upage);
+}
+
+bool
+page_less_func(const struct hash_elem *e1, const struct hash_elem *e2,void *aux UNUSED)
+{
+  const struct page *p1 = hash_entry (e1, struct page, elem);
+  const struct page *p2 = hash_entry (e2, struct page, elem);
+
+  return p1->upage < p2->upage;
 }

@@ -14,6 +14,7 @@ static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
+static bool is_stack_access(int32_t addr, uint32_t* esp);
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -124,56 +125,65 @@ kill (struct intr_frame *f)
    description of "Interrupt 14--Page Fault Exception (#PF)" in
    [IA32-v3a] section 5.15 "Exception and Interrupt Reference". */
 
-static bool is_stack_access(int32_t fault_addr, uint32_t* esp)
-{
-   return fault_addr>=(esp-32) && find_vme(pg_round_down(fault_addr))==NULL && PHYS_BASE-pg_round_down(fault_addr)<=STACK_SIZE;
-}
 static void
-page_fault (struct intr_frame *f) 
+page_fault(struct intr_frame *f)
 {
-  bool not_present;  /* True: not-present page, false: writing r/o page. */
-  bool write;        /* True: access was write, false: access was read. */
-  bool user;         /* True: access by user, false: access by kernel. */
-  void *fault_addr;  /* Fault address. */
+    bool not_present; /* True: not-present page, false: writing r/o page. */
+    bool write;       /* True: access was write, false: access was read. */
+    bool user;        /* True: access by user, false: access by kernel. */
+    void *fault_addr; /* Fault address. */
 
-  /* Obtain faulting address, the virtual address that was
+    /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
      data.  It is not necessarily the address of the instruction
      that caused the fault (that's f->eip).
      See [IA32-v2a] "MOV--Move to/from Control Registers" and
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
-  asm ("movl %%cr2, %0" : "=r" (fault_addr));
+    asm("movl %%cr2, %0"
+        : "=r"(fault_addr));
 
-  /* Turn interrupts back on (they were only off so that we could
+    /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
-  intr_enable ();
+    intr_enable();
 
-  /* Count page faults. */
-  page_fault_cnt++;
+    /* Count page faults. */
+    page_fault_cnt++;
 
-  /* Determine cause. */
-  not_present = (f->error_code & PF_P) == 0;
-  write = (f->error_code & PF_W) != 0;
-  user = (f->error_code & PF_U) != 0;
+    /* Determine cause. */
+    not_present = (f->error_code & PF_P) == 0;
+    write = (f->error_code & PF_W) != 0;
+    user = (f->error_code & PF_U) != 0;
 
-  //if(!user || is_kernel_vaddr(fault_addr)) syscall_exit(-1);
-
-  if(fault_addr == NULL || fault_addr < 0x8048000 ||
-     fault_addr > PHYS_BASE ||!not_present) syscall_exit(-1);
-
-  
-  if(is_stack_access(fault_addr, f->esp)) // stack access => stack growth
-  {
-     if(vme_create(pg_round_down(fault_addr), true, NULL, 0,0,0, false,true)==false)
-     {
+    if(fault_addr == NULL || !not_present || !is_user_vaddr(fault_addr))
         syscall_exit(-1);
-     }
-  }
-  if(vm_load(pg_round_down(fault_addr))==false)
-  {
-     syscall_exit(-1);
-  }
-  return;
+
+    if(is_stack_access(fault_addr, f->esp))
+    {
+        if(!page_create_with_zero(pg_round_down(fault_addr)))
+            syscall_exit(-1);
+    }
+
+    if(page_load(pg_round_down(fault_addr)))
+       return;
+    else 
+        syscall_exit(-1);    
+
+    /* To implement virtual memory, delete the rest of the function
+     body, and replace it with code that brings in the page to
+     which fault_addr refers. */
+    printf("Page fault at %p: %s error %s page in %s context.\n",
+           fault_addr,
+           not_present ? "not present" : "rights violation",
+           write ? "writing" : "reading",
+           user ? "user" : "kernel");
+    kill(f);
 }
 
+static bool
+is_stack_access(int32_t fault_addr, uint32_t* esp)
+{
+    return fault_addr >= (esp - 32) && 
+            (PHYS_BASE - pg_round_down(fault_addr)) <= STACK_SIZE && 
+            page_find_by_upage(pg_round_down(fault_addr)) == NULL;
+}

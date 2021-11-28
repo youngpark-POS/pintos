@@ -163,58 +163,48 @@ thread_print_stats (void)
    The code provided sets the new thread's `priority' member to
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
-tid_t
-thread_create (const char *name, int priority,
-               thread_func *function, void *aux) 
+tid_t thread_create(const char *name, int priority,
+                    thread_func *function, void *aux)
 {
-  struct thread *t;
-  struct kernel_thread_frame *kf;
-  struct switch_entry_frame *ef;
-  struct switch_threads_frame *sf;
-  tid_t tid;
+    struct thread *t;
+    struct kernel_thread_frame *kf;
+    struct switch_entry_frame *ef;
+    struct switch_threads_frame *sf;
+    tid_t tid;
 
-  ASSERT (function != NULL);
+    ASSERT(function != NULL);
 
-  /* Allocate thread. */
-  t = palloc_get_page (PAL_ZERO);
-  if (t == NULL)
-    return TID_ERROR;
+    /* Allocate thread. */
+    t = palloc_get_page(PAL_ZERO);
+    if (t == NULL)
+        return TID_ERROR;
 
-  /* Initialize thread. */
-  init_thread (t, name, priority);
-  tid = t->tid = allocate_tid ();
+    /* Initialize thread. */
+    init_thread(t, name, priority);
+    tid = t->tid = allocate_tid();
 
-  vm_init(&t->vm);
+    /*mapping id*/
+    t->number_mapped=0;
 
-  /* Stack frame for kernel_thread(). */
-  kf = alloc_frame (t, sizeof *kf);
-  kf->eip = NULL;
-  kf->function = function;
-  kf->aux = aux;
+    /* Stack frame for kernel_thread(). */
+    kf = alloc_frame(t, sizeof *kf);
+    kf->eip = NULL;
+    kf->function = function;
+    kf->aux = aux;
 
-  /* Stack frame for switch_entry(). */
-  ef = alloc_frame (t, sizeof *ef);
-  ef->eip = (void (*) (void)) kernel_thread;
+    /* Stack frame for switch_entry(). */
+    ef = alloc_frame(t, sizeof *ef);
+    ef->eip = (void (*)(void))kernel_thread;
 
-  /* Stack frame for switch_threads(). */
-  sf = alloc_frame (t, sizeof *sf);
-  sf->eip = switch_entry;
-  sf->ebp = 0;
-  
-  list_push_back(&thread_current()->child_list, &t->child_elem);
-  t->parent_process = thread_current();
-  t->loaded = false;
-  t->finished = false;
-  sema_init(&t->child_load, 0);
-  sema_init(&t->child_wait, 0);
-  sema_init(&t->child_reap, 0);
-  list_init(&t->mapping_list);
-  t->max_mapid = 0;
+    /* Stack frame for switch_threads(). */
+    sf = alloc_frame(t, sizeof *sf);
+    sf->eip = switch_entry;
+    sf->ebp = 0;
 
-  /* Add to run queue. */
-  thread_unblock (t);
+    /* Add to run queue. */
+    thread_unblock(t);
 
-  return tid;
+    return tid;
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -461,30 +451,32 @@ is_thread (struct thread *t)
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
-init_thread (struct thread *t, const char *name, int priority)
+init_thread(struct thread *t, const char *name, int priority)
 {
-  enum intr_level old_level;
+    enum intr_level old_level;
 
-  ASSERT (t != NULL);
-  ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
-  ASSERT (name != NULL);
+    ASSERT(t != NULL);
+    ASSERT(PRI_MIN <= priority && priority <= PRI_MAX);
+    ASSERT(name != NULL);
 
-  memset (t, 0, sizeof *t);
-  t->status = THREAD_BLOCKED;
-  strlcpy (t->name, name, sizeof t->name);
-  t->stack = (uint8_t *) t + PGSIZE;
-  t->priority = priority;
-  t->magic = THREAD_MAGIC;
+    memset(t, 0, sizeof *t);
+    t->status = THREAD_BLOCKED;
+    strlcpy(t->name, name, sizeof t->name);
+    t->stack = (uint8_t *)t + PGSIZE;
 
-  memset(t->fd_table, 0, sizeof(struct file*) * FD_MAX);
-  list_init(&t->child_list);
-  sema_init(&t->child_load, 0);
-  sema_init(&t->child_wait, 0);
-  sema_init(&t->child_reap, 0);
+#ifdef USERPROG
+    t->pcb = NULL;
+    list_init(&t->children);
+    list_init(&t->fdt);
+    t->next_fd = 2;
+#endif
+    list_init(&t->file_mapping_list);
+    t->pages = NULL;
+    t->magic = THREAD_MAGIC;
 
-  old_level = intr_disable ();
-  list_push_back (&all_list, &t->allelem);
-  intr_set_level (old_level);
+    old_level = intr_disable();
+    list_push_back(&all_list, &t->allelem);
+    intr_set_level(old_level);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -600,3 +592,62 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+#ifdef USERPROG
+
+/* Sets the current thread's pagedir to NEW_PAGEDIR. */
+void thread_set_pagedir(uint32_t *new_pagedir)
+{
+    thread_current()->pagedir = new_pagedir;
+}
+
+/* Returns the current thread's pagedir. */
+uint32_t *thread_get_pagedir(void)
+{
+    return thread_current()->pagedir;
+}
+
+/* Sets the current thread's pcb to NEW_PCB. */
+void thread_set_pcb(struct process *new_pcb)
+{
+    thread_current()->pcb = new_pcb;
+}
+
+/* Returns the current thread's pcb. */
+struct process *thread_get_pcb(void)
+{
+    return thread_current()->pcb;
+}
+
+/* Returns the current thread's children. */
+struct list *thread_get_children(void)
+{
+    return &thread_current()->children;
+}
+
+/* Returns the current thread's fdt. */
+struct list *thread_get_fdt(void)
+{
+    return &thread_current()->fdt;
+}
+
+/* Returns the current thread's next_fd and increments
+   it by 1. */
+int thread_get_next_fd(void)
+{
+    return thread_current()->next_fd++;
+}
+
+/* Sets the current thread's running_file to NEW_RUNNING_FILE. */
+void thread_set_running_file(struct file *new_running_file)
+{
+    thread_current()->running_file = new_running_file;
+}
+
+/* Returns the current thread's running_file. */
+struct file *thread_get_running_file(void)
+{
+    return thread_current()->running_file;
+}
+
+#endif

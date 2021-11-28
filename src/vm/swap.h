@@ -1,23 +1,13 @@
 #ifndef VM_SWAP_H
 #define VM_SWAP_H
 
-#include <stdint.h>
-#include <debug.h>
-#include <list.h>
-#include <hash.h>
-#include "threads/palloc.h"
-#include "threads/thread.h"
-#include "threads/synch.h"
-#include "devices/block.h"
-#include "lib/kernel/bitmap.h"
+#include <inttypes.h>
+#include <stdbool.h>
+#include <stddef.h>
 
-struct block* swap_block;
-struct bitmap* swap_bitmap;
-struct lock swap_lock;
-
-void swap_init();
-size_t swap_out(void*);
-size_t swap_in(void*, size_t);
-void swap_remove(size_t);
+void swap_init(void);
+bool swap_in(void *kpage, size_t sector);
+size_t swap_out(void *kpage);
+void swap_remove(size_t swap_index);
 
 #endif
