@@ -7,7 +7,7 @@
 #include "vm/frame.h"
 #include <debug.h>
 
-struct lock file_lock;
+struct lock filesys_lock;
 typedef int mapid_t;
 
 struct mapping

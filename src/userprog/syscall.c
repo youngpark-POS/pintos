@@ -17,7 +17,7 @@
 #include "vm/page.h"
 #include "vm/frame.h"
 
-struct lock filesys_lock;
+
 
 static void syscall_handler(struct intr_frame *);
 
@@ -494,23 +494,23 @@ syscall_mmap(int fd, void* addr)
     return -1;
   }
   //ASSERT(!"mmap enter2");
-  lock_acquire(&file_lock); 
-  ASSERT(!"mmap enter3");
+  lock_acquire(&filesys_lock);
+ // ASSERT(!"mmap enter3");
   struct file_descriptor_entry *fde=process_get_fde(fd);
-   ASSERT(!"mmap enter4");
+   //ASSERT(!"mmap enter4");
   file = file_reopen(fde->file);
-  ASSERT(!"mmap enter5");
+  //ASSERT(!"mmap enter5");
   if(file == NULL)
   {
-    lock_release(&file_lock);
+    lock_release(&filesys_lock);
     return -1;
   }
   else
   {
     len = file_length(file);
-    lock_release(&file_lock);
+    lock_release(&filesys_lock);
   }
-  ASSERT(!"mmap enter");
+  //ASSERT(!"mmap enter");
   while(len > 0)
   {
     //if(find_vme(addr))
@@ -566,7 +566,7 @@ syscall_munmap(mapid_t mapid)
   }
   if(mapping==NULL) return;
   //ASSERT(!"found mapping"); // <- unreached
-  lock_acquire(&file_lock);
+  lock_acquire(&filesys_lock);
   for(i = 0; i<mapping->page_num; i++)
   {
     entry=find_vme(mapping->addr + i*PGSIZE);
@@ -584,7 +584,7 @@ syscall_munmap(mapid_t mapid)
   list_remove(&mapping->elem);
   file_close(mapping->file);
   free(mapping);
-  lock_release(&file_lock);
+  lock_release(&filesys_lock);
   //ASSERT(!"unmapped"); // <- unreached
 }
 
