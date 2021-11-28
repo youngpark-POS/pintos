@@ -487,6 +487,7 @@ void syscall_close(int fd)
 
     lock_acquire(&filesys_lock);
     file_close(f);
+    thread_current()->fd_table[fd] = NULL;
     lock_release(&filesys_lock);
 }
 
