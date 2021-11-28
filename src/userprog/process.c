@@ -375,7 +375,7 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
     if(t->pages == NULL)
         goto done;
     vm_init(t->pages);
-
+    //hash_init(t->pages, page_hash_func, page_less_func, NULL);
     /* Open executable file. */
     lock_acquire(filesys_lock);
     file = filesys_open(file_name);
@@ -553,13 +553,17 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 
         //if(!page_create_with_file(upage, file, ofs, page_read_bytes, page_zero_bytes, writable, false))
         if(!vme_create(upage, writable, file, ofs, page_read_bytes, page_zero_bytes, false, false))
+        {
+            ASSERT(!"F");
             return false;
+        }
+            
 
         /* Advance. */
         read_bytes -= page_read_bytes;
         zero_bytes -= page_zero_bytes;
         upage += PGSIZE;
-        ofs += page_read_bytes;
+        ofs += PGSIZE;
     }
     return true;
 }
@@ -569,11 +573,11 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack(void **esp)
 {
-    if(!vme_create(PHYS_BASE - PGSIZE, true, NULL, 0, 
-           0, 0, false, true))
+    void* vaddr=PHYS_BASE-PGSIZE;
+    if(!vme_create(vaddr, true, NULL, 0, 0, 0, false, true))
         return false;
     
-    if(!vm_load(PHYS_BASE - PGSIZE))
+    if(!vm_load(vaddr))
         return false;
         
     *esp = PHYS_BASE;

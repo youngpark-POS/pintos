@@ -18,10 +18,7 @@ bool is_back (struct list_elem* elem)
 {
     return list_back(&frame_list)==elem;
 }
-uint32_t* frame_to_pagedir(struct frame* f)
-{
-    return f->entry->thread->pagedir;
-}
+
 
 void frame_push_back(struct frame* f)
 {
@@ -91,16 +88,16 @@ bool frame_deallocate(struct frame* f)
     free(f);
     lock_release(&frame_lock);
 }
-
-bool frame_is_dirty(struct frame* f)
-{
-    return pagedir_is_dirty(frame_to_pagedir(f), f->paddr) ||
-           pagedir_is_dirty(frame_to_pagedir(f), f->entry->vaddr);
-}
 uint32_t * get_pagedir(struct frame* frame)
 {
     return frame->entry->thread->pagedir;
 }
+bool frame_is_dirty(struct frame* f)
+{
+    return pagedir_is_dirty(get_pagedir(f), f->paddr) ||
+           pagedir_is_dirty(get_pagedir(f), f->entry->vaddr);
+}
+
 struct frame* frame_evict(void)
 {
     ASSERT(lock_held_by_current_thread(&frame_lock));

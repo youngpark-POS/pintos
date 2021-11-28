@@ -489,12 +489,17 @@ syscall_mmap(int fd, void* addr)
   struct mapping* mapping;
   int i;
   //ASSERT(!"mmap enter"); // <- unreached
-  if(!addr || addr < 0x8048000 || addr > 0xc0000000 || pg_ofs(addr)) 
+  if(addr==NULL || /* addr < 0x8048000 || addr > 0xc0000000*/ !is_user_vaddr(addr) || pg_ofs(addr)) 
   {
     return -1;
   }
-  lock_acquire(&file_lock);
-  file = file_reopen(process_get_fde(fd)->file);
+  //ASSERT(!"mmap enter2");
+  lock_acquire(&file_lock); 
+  ASSERT(!"mmap enter3");
+  struct file_descriptor_entry *fde=process_get_fde(fd);
+   ASSERT(!"mmap enter4");
+  file = file_reopen(fde->file);
+  ASSERT(!"mmap enter5");
   if(file == NULL)
   {
     lock_release(&file_lock);
@@ -505,10 +510,11 @@ syscall_mmap(int fd, void* addr)
     len = file_length(file);
     lock_release(&file_lock);
   }
+  ASSERT(!"mmap enter");
   while(len > 0)
   {
-    if(find_vme(addr))
-      return -1;
+    //if(find_vme(addr))
+      //return -1;
     read_bytes = len >= PGSIZE ? PGSIZE : len;
     zero_bytes = read_bytes == PGSIZE ? 0 : PGSIZE - read_bytes;
     if(!vme_create(addr + ofs, true, file, ofs, read_bytes, zero_bytes, 
@@ -533,9 +539,10 @@ syscall_mmap(int fd, void* addr)
   mapping->file = file;
   mapping->page_num = page_cnt;
   mapping->mapid = thread_current()->number_mapped;
-  (thread_current()->number_mapped)++;
+  (thread_current()->number_mapped)++; 
+  //ASSERT(mapping->mapid);
   list_push_back(&thread_current()->mapping_list, &mapping->elem);
-  // ASSERT(mapping->mapid); //<= mapid = 0
+  // //<= mapid = 0
   return mapping->mapid;
 }
 
@@ -572,7 +579,7 @@ syscall_munmap(mapid_t mapid)
       frame_destroy(entry->frame);
     }
     pagedir_clear_page(entry->thread->pagedir, entry->vaddr);
-    hash_delete(&entry->thread->pages, &entry->elem);
+    hash_delete(entry->thread->pages, &entry->elem);
   }
   list_remove(&mapping->elem);
   file_close(mapping->file);
@@ -590,35 +597,4 @@ mmap_file_write_at(struct file* file, void* addr, uint32_t read_bytes, off_t ofs
     lock_release(&filesys_lock);
 }
 
-static mapid_t
-register_new_mmap(struct file* file, void* base, int page_count)
-{
-    struct mapping* m = malloc(sizeof(struct mapping));
-    m->file = file;
-    m->addr = base;
-    m->page_num = page_count;
-    m->mapid = thread_current()->number_mapped++;
-    list_push_back(&thread_current()->mapping_list, &m->elem);
-    return m->mapid;
-}
 
-static struct mapping*
-get_mapping_by_mapid(mapid_t id)
-{
-    struct list *list = &thread_current ()->mapping_list;
-    struct list_elem *e;
-    for (e = list_begin (list); e != list_end (list); e = list_next (e))
-    {
-        struct mapping *mmap = list_entry (e, struct mapping, elem);
-        if (mmap->mapid == id)
-            return mmap;
-    }
-    return NULL;
-}
-
-static void
-clear_previous_pages(void* addr, off_t ofs)
-{
-    for(int i = 0 ; i < ofs; i = i + PGSIZE)
-        page_destory_by_upage(pg_round_down(addr + i), true);
-}

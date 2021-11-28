@@ -47,7 +47,7 @@ void vm_destroy(struct hash *vm)
 
 struct vmentry* find_vme(void *vaddr)
 {
-    struct hash *vm=&thread_current()->pages;
+    struct hash *vm=thread_current()->pages;
     struct vmentry vme;
     struct hash_elem *elem;
     vme.vaddr=pg_round_down(vaddr);
@@ -125,7 +125,7 @@ bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
                 newone->frame=NULL;
                 newone->thread=thread_current();
             }
-           insert_vme(&thread_current()->pages, newone);
+           insert_vme(thread_current()->pages, newone);
            return true;
         }
     }

@@ -155,7 +155,7 @@ page_fault(struct intr_frame *f)
     write = (f->error_code & PF_W) != 0;
     user = (f->error_code & PF_U) != 0;
 
-    if(fault_addr == NULL || !not_present || !is_user_vaddr(fault_addr))
+    if(fault_addr == NULL || !not_present || fault_addr < 0x8048000 || fault_addr>PHYS_BASE)
         syscall_exit(-1);
 
     if(is_stack_access(fault_addr, f->esp))
