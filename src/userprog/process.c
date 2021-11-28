@@ -187,7 +187,7 @@ void process_exit(void)
     lock_release(filesys_lock);
 
     /* Destory page table */
-    page_exit();
+    vm_destroy(cur->pages);
 
     /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -210,13 +210,11 @@ void process_exit(void)
 static void
 unmap_all()
 {
-    struct list_elem *e;
-    struct file_mapping *m;
-    for (e = list_begin (&thread_current()->file_mapping_list); e != list_end (&thread_current()->file_mapping_list);)
+    struct list_elem *e = list_begin (&thread_current()->mapping_list);
+    while(e != list_end (&thread_current()->mapping_list))
     {
-        struct file_mapping *mmap = list_entry (e, struct file_mapping, elem);
+        syscall_munmap(list_entry(e, struct mapping, elem));
         e = list_next (e);
-        unmap (mmap);
     }
 }
 
@@ -376,7 +374,7 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
     t->pages = malloc (sizeof *t->pages);
     if(t->pages == NULL)
         goto done;
-    hash_init (t->pages, page_hash_func, page_less_func, NULL);
+    vm_init(t->pages);
 
     /* Open executable file. */
     lock_acquire(filesys_lock);
@@ -553,7 +551,8 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
         size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-        if(!page_create_with_file(upage, file, ofs, page_read_bytes, page_zero_bytes, writable, false))
+        //if(!page_create_with_file(upage, file, ofs, page_read_bytes, page_zero_bytes, writable, false))
+        if(!vme_create(upage, writable, file, ofs, page_read_bytes, page_zero_bytes, false, false))
             return false;
 
         /* Advance. */
@@ -570,10 +569,11 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack(void **esp)
 {
-    if(!page_create_with_zero(PHYS_BASE - PGSIZE))
+    if(!vme_create(PHYS_BASE - PGSIZE, true, NULL, 0, 
+           0, 0, false, true))
         return false;
     
-    if(!page_load(PHYS_BASE - PGSIZE))
+    if(!vm_load(PHYS_BASE - PGSIZE))
         return false;
         
     *esp = PHYS_BASE;

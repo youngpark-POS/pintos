@@ -1,49 +1,54 @@
 #ifndef VM_PAGE_H
 #define VM_PAGE_H
 
+#include <stdint.h>
+#include <debug.h>
+#include <list.h>
+#include <stdio.h>
 #include <hash.h>
-#include "devices/block.h"
 #include "filesys/off_t.h"
+#include "threads/palloc.h"
+#include "threads/thread.h"
 #include "threads/synch.h"
 
-enum page_type
-  {
-    PAGE_ZERO,          
-    PAGE_FILE,
-    PAGE_MMAP,
-    PAGE_SWAP
-  };
+#define PAGE_ZERO 0
+#define PAGE_FILE 1
+#define PAGE_MAPP 2
+#define PAGE_SWAP 3
 
-struct page 
-    {
-        struct thread* thread;
-        struct hash_elem elem; 
+struct vmentry
+{
+    int type;
+    int pretype;
+    struct thread* thread;
+    void *vaddr;
+    bool writable;
 
-        struct frame* frame;
-        void* upage;
-        
-        size_t swap_index;
-        
-        struct file* file;
-        bool writable;
-        uint32_t read_bytes;
-        uint32_t zero_bytes;
-        off_t ofs;
+    bool is_loaded;
+    struct file* file;
+    struct list_elem mmap_elem;
 
-        enum page_type type;
-        enum page_type prev_type;
-    };
+    off_t offset;
+    size_t read_bytes;
+    size_t zero_bytes;
 
-bool page_create_with_file(void* upage, struct file* file, off_t ofs, uint32_t read_bytes,  uint32_t zero_bytes, bool writable, bool is_mmap);
-bool page_create_with_zero(void *upage);
-bool page_load(void *upage);
-void page_exit(void);
-void page_destory(struct hash_elem *e, void *aux);
-struct page* page_find_by_upage(void* upage);
-bool page_load_with_file(struct frame* f,struct page* p);
-void page_destory_by_upage (void* upage, bool);
-    
-hash_hash_func page_hash_func;
-hash_less_func page_less_func;
+    size_t swap_slot;
+
+    struct frame* frame;
+
+    struct hash_elem elem;
+};
+
+void vm_init(struct hash *vm);
+void vm_destroy(struct hash *vm);
+
+struct vmentry* find_vme(void *vaddr);
+bool insert_vme(struct hash* vm, struct vmentry * vme);
+bool delete_vme(struct hash* vm, struct vmentry * vme);
+bool delete_vme_add(void* upage);
+bool vme_create(void *vaddr, bool writable, struct file* file, size_t offset,
+                size_t read_bytes, size_t zero_bytes, bool ismap, bool isstack);
+bool vm_load(void *vaddr);
+struct vmentry* addr_to_entry(void* addr);
 
 #endif

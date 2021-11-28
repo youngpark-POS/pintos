@@ -1,78 +1,70 @@
-#include "vm/swap.h"
-#include <bitmap.h>
-#include <debug.h>
-#include "vm/frame.h"
-#include "vm/page.h"
-#include "threads/vaddr.h"
+#include "page.h"
 #include "threads/synch.h"
+#include "vm/frame.h"
+#include "vm/swap.h"
+#include "userprog/pagedir.h"
+#include "filesys/file.h"
+#include "devices/block.h"
+#include "bitmap.h"
+#include <string.h>
 
-static struct block *swap_block_device;
+#define NUM_SECTORS_PER_ENTRY 8 // 4096B per a block, 512B per a sector
+//#define NUM_SECTORS_PER_ENTRY (PGSIZE/BLOCK_SECTOR_SIZE)
 
-static struct bitmap *swap_bitmap;
 
-static struct lock swap_lock;
-
-#define NUM_SECTORS_PER_PAGE (PGSIZE / BLOCK_SECTOR_SIZE)
-
-void
-swap_init(void)
+void swap_init()
 {
-    swap_block_device = block_get_role(BLOCK_SWAP);
-    ASSERT(swap_block_device != NULL);
-    swap_bitmap = bitmap_create(block_size(swap_block_device) / NUM_SECTORS_PER_PAGE);
-    ASSERT(swap_bitmap != NULL);
-    bitmap_set_all (swap_bitmap, true);
+    
+    swap_block = block_get_role(3);
+    ASSERT(swap_block!=NULL);
+    swap_bitmap = bitmap_create(block_size(swap_block) / NUM_SECTORS_PER_ENTRY);
+    ASSERT(swap_bitmap!=NULL);
+    //swap_bitmap = bitmap_create(8*1024);
+    bitmap_set_all(swap_bitmap, true);
     lock_init(&swap_lock);
 }
 
-bool
-swap_in(void *kpage, size_t swap_index)
+size_t swap_out(void* addr)
 {
+    size_t swap_idx;
+    size_t i;
     lock_acquire(&swap_lock);
-
-    ASSERT(kpage != NULL);
-
-    if(swap_index >= bitmap_size(swap_bitmap) || bitmap_test(swap_bitmap, swap_index))
+    swap_idx = bitmap_scan(swap_bitmap, 0, 1, true);
+    if(swap_idx == BITMAP_ERROR) 
     {
         lock_release(&swap_lock);
-        return false;
+        return BITMAP_ERROR;
     }
-
-    for(size_t i = 0; i < NUM_SECTORS_PER_PAGE; i++)
-        block_read(swap_block_device, swap_index * NUM_SECTORS_PER_PAGE + i, kpage + BLOCK_SECTOR_SIZE * i);
+    else bitmap_set(swap_bitmap, swap_idx, false);
     
-    bitmap_flip(swap_bitmap, swap_index);
+    for(i = 0; i < NUM_SECTORS_PER_ENTRY; i++)
+        block_write(swap_block, swap_idx * NUM_SECTORS_PER_ENTRY + i, addr + BLOCK_SECTOR_SIZE * i);
+    
     lock_release(&swap_lock);
-
-    return true;
+    return swap_idx;
 }
 
-/* Swap out of kpage. 
-    If fail, return -1
-    Otherwise, return sector index */
-size_t
-swap_out(void *kpage)
+size_t swap_in(void* addr, size_t swap_idx)
 {
+    int i;
     lock_acquire(&swap_lock);
 
-    ASSERT(kpage != NULL);
-
-    size_t swap_index = bitmap_scan_and_flip (swap_bitmap, 0, 1, true);
-    if (swap_index == BITMAP_ERROR)
-        return swap_index;
-    
-    for(size_t i = 0; i < NUM_SECTORS_PER_PAGE; i++)
-        block_write(swap_block_device, swap_index * NUM_SECTORS_PER_PAGE + i, kpage + BLOCK_SECTOR_SIZE * i);
+    if(bitmap_test(swap_bitmap, swap_idx) || swap_idx >= bitmap_size(swap_bitmap))
+    {
+        lock_release(&swap_lock);
+        return -1;
+    }
+    for(i = 0;i < NUM_SECTORS_PER_ENTRY;i++)
+        block_read(swap_block, swap_idx * NUM_SECTORS_PER_ENTRY + i, addr + BLOCK_SECTOR_SIZE * i);
+    bitmap_set(swap_bitmap, swap_idx, true);
 
     lock_release(&swap_lock);
-    return swap_index;
-}
+    return swap_idx;
+} 
 
-void
-swap_remove(size_t swap_index)
+void swap_remove(size_t swap_idx)
 {
     lock_acquire(&swap_lock);
-    ASSERT(swap_index != BITMAP_ERROR);
-    bitmap_set(swap_bitmap, swap_index, true);
+    bitmap_set(swap_bitmap, swap_idx, true);
     lock_release(&swap_lock);
 }
