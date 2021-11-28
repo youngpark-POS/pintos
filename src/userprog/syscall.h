@@ -20,6 +20,7 @@ struct mapping
 };
 
 void validate_addr(void*);
+void destroy_mapping();
 void syscall_init (void);
 void syscall_halt(void);
 void syscall_exit(int);
@@ -30,7 +31,7 @@ bool syscall_remove(const char*);
 int syscall_open(const char*);
 int syscall_filesize(int);
 int syscall_read(int, void*, unsigned);
-int syscall_write(int, void*, unsigned);
+int syscall_write(int, const void*, unsigned);
 void syscall_seek(int, unsigned);
 unsigned syscall_tell(int);
 void syscall_close(int);

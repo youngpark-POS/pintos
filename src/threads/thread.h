@@ -86,40 +86,46 @@ typedef int tid_t;
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
 struct thread
-  {
+{
     /* Owned by thread.c. */
-    tid_t tid;                          /* Thread identifier. */
-    enum thread_status status;          /* Thread state. */
-    char name[16];                      /* Name (for debugging purposes). */
-    uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
-    struct list_elem allelem;           /* List element for all threads list. */
+    tid_t tid;                 /* Thread identifier. */
+    enum thread_status status; /* Thread state. */
+    char name[16];             /* Name (for debugging purposes). */
+    uint8_t *stack;            /* Saved stack pointer. */
+    int priority;              /* Priority. */
+    struct list_elem allelem;  /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
-    struct list_elem elem;              /* List element. */
+    struct list_elem elem; /* List element. */
 
-#ifdef USERPROG
-    /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
-#endif
-    int exit_code;
-    bool loaded;
-    bool finished;
-    struct file *fd_table[FD_MAX];
-    struct thread *parent_process;
-    struct list child_list;
-    struct list_elem child_elem;
-    struct semaphore child_load;
-    struct semaphore child_wait;
-    struct semaphore child_reap;
-    struct hash vm;
-    struct list mapping_list;
-    int max_mapid;
+    /* Owned by devices/timer.c. */
+    int64_t wake_ticks; /* Ticks to wake up. */
+
+    /* Shared between thread.c and synch.c. */
+    int original_priority;   /* Original priority before donation. */
 
     /* Owned by thread.c. */
-    unsigned magic;                     /* Detects stack overflow. */
+    int nice;       /* Figure that indicates how nice to others. */
+    int recent_cpu; /* Weighted average amount of received CPU time. */
 
-  };
+    int number_mapped;
+    struct list mapping_list;
+
+#ifdef USERPROG
+    /* Shared between userprog/process.c and userprog/syscall.c. */
+    uint32_t *pagedir;         /* Page directory. */
+    struct process *pcb;       /* Process control block. */
+    struct list children;      /* List of children processes. */
+    struct list fdt;           /* List of file descriptor entries. */
+    int next_fd;               /* File descriptor for next file. */
+    struct file *running_file; /* Currently running file. */
+#endif
+
+   struct hash *pages;  /* Project 3 virtual pages */
+
+    /* Owned by thread.c. */
+    unsigned magic; /* Detects stack overflow. */
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -156,5 +162,17 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+#ifdef USERPROG
+uint32_t *thread_get_pagedir(void);
+void thread_set_pagedir(uint32_t *);
+struct process *thread_get_pcb(void);
+void thread_set_pcb(struct process *);
+struct list *thread_get_children(void);
+struct list *thread_get_fdt(void);
+int thread_get_next_fd(void);
+struct file *thread_get_running_file(void);
+void thread_set_running_file(struct file *);
+#endif
 
 #endif /* threads/thread.h */
