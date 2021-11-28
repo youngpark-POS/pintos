@@ -588,6 +588,31 @@ syscall_munmap(mapid_t mapid)
   //ASSERT(!"unmapped"); // <- unreached
 }
 
+void unmap(struct mapping *mapping)
+{
+    int i;
+    struct vmentry* entry;
+    lock_acquire(&filesys_lock);
+    for(i = 0; i<mapping->page_num; i++)
+    {
+        entry=find_vme(mapping->addr + i*PGSIZE);
+        if(entry  == NULL) continue;
+        if(entry->frame != NULL)
+        {
+            //ASSERT(!"syscall_unmap");
+            if(pagedir_is_dirty(entry->thread->pagedir, entry->vaddr)) 
+                file_write_at(mapping->file, entry->vaddr, PGSIZE, PGSIZE * i);
+            frame_destroy(entry->frame);
+        }
+        pagedir_clear_page(entry->thread->pagedir, entry->vaddr);
+        hash_delete(entry->thread->pages, &entry->elem);
+    }
+    list_remove(&mapping->elem);
+    file_close(mapping->file);
+    free(mapping);
+    lock_release(&filesys_lock);
+}
+
 void
 mmap_file_write_at(struct file* file, void* addr, uint32_t read_bytes, off_t ofs)
 {

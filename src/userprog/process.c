@@ -213,8 +213,9 @@ unmap_all()
     struct list_elem *e = list_begin (&thread_current()->mapping_list);
     while(e != list_end (&thread_current()->mapping_list))
     {
-        syscall_munmap(list_entry(e, struct mapping, elem));
+        struct mapping* m=list_entry(e, struct mapping, elem);
         e = list_next (e);
+        unmap(m);
     }
 }
 
