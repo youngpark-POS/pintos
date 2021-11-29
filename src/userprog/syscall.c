@@ -241,13 +241,30 @@ static void
 check_vaddr(void* esp, const void *vaddr)
 {
     if(!vaddr || !is_user_vaddr(vaddr))
+    {
+        //ASSERT(!"A");
         syscall_exit(-1);
+    }
+    if(vaddr < 0x8048000 || vaddr>PHYS_BASE || vaddr==0x20101234)
+    {
+        //ASSERT(!"B");
+        syscall_exit(-1);
+    }
     if(!find_vme(pg_round_down(vaddr)))
     {
         if(is_stack_access(vaddr, esp))
-            vme_create(pg_round_down(vaddr), true, NULL,
-            0, 0, 0, false, true);
-        else syscall_exit(-1);
+        {
+            if(vme_create(pg_round_down(vaddr), true, NULL,0, 0, 0, false, true)==false)
+            {
+                //ASSERT(!"C");
+                syscall_exit(-1); 
+            }
+        }
+        else
+        {
+            //ASSERT(!"D");
+            syscall_exit(-1);
+        }
     }
 }
 
@@ -310,7 +327,7 @@ pid_t syscall_exec(const char *cmd_line)
     pid = process_execute(cmd_line);
     child = process_get_child(pid);
 
-    if (!child || !child->is_loaded)
+    if (!child || !child->is_loaded || child->is_exited)
         return PID_ERROR;
 
     return pid;
