@@ -7,7 +7,7 @@
 #include "threads/vaddr.h"
 #include "threads/thread.h"
 
-#define STACK_SIZE (8*(1<<20))
+
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -125,6 +125,12 @@ kill (struct intr_frame *f)
    description of "Interrupt 14--Page Fault Exception (#PF)" in
    [IA32-v3a] section 5.15 "Exception and Interrupt Reference". */
 
+bool
+is_stack_access(int32_t* fault_addr, uint32_t* esp)
+{
+    return (PHYS_BASE - pg_round_down(fault_addr)) <= STACK_SIZE && fault_addr >= (esp - 32) && find_vme(pg_round_down(fault_addr)) == NULL;
+}
+
 static void
 page_fault(struct intr_frame *f)
 {
@@ -166,26 +172,7 @@ page_fault(struct intr_frame *f)
             syscall_exit(-1);
     }
 
-    if(vm_load(pg_round_down(fault_addr)))
-       return;
-    else 
-        syscall_exit(-1);    
-
-    /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-    printf("Page fault at %p: %s error %s page in %s context.\n",
-           fault_addr,
-           not_present ? "not present" : "rights violation",
-           write ? "writing" : "reading",
-           user ? "user" : "kernel");
-    kill(f);
+    if(vm_load(pg_round_down(fault_addr))==false) syscall_exit(-1);
+    return; 
 }
 
-bool
-is_stack_access(int32_t* fault_addr, uint32_t* esp)
-{
-    return fault_addr >= (esp - 32) && 
-            (PHYS_BASE - pg_round_down(fault_addr)) <= STACK_SIZE && 
-            find_vme(pg_round_down(fault_addr)) == NULL;
-}

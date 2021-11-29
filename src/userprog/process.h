@@ -5,23 +5,18 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 
-#define MAX_ARGS 128
 
-/* A process control block. */
 struct process
 {
-    /* Owned by process.c. */
-    const char *file_name; /* File name to execute. */
-
-    /* Shared between process.c and syscall.c. */
-    pid_t pid;                  /* Process identifier. */
-    struct thread *parent;      /* Parent process. */
-    struct list_elem childelem; /* List element for children list. */
-    bool is_loaded;             /* Whether program is loaded. */
-    struct semaphore load_sema; /* Semaphore for waiting until load. */
-    bool is_exited;             /* Whether process is exited. */
-    struct semaphore exit_sema; /* Semaphore for waiting until exit. */
-    int exit_status;            /* Exit status. */
+    const char *file_name; 
+    struct thread *parent;  
+    struct list_elem childelem; 
+    struct semaphore load_sema; 
+    pid_t pid;                 
+    bool is_loaded;             
+    bool is_exited;             
+    int exit_status;   
+    struct semaphore exit_sema;          
 };
 
 tid_t process_execute(const char *);
@@ -34,4 +29,4 @@ void process_remove_child(struct process *);
 struct file* process_get_file(int);
 int process_add_file(struct file*);
 
-#endif /* userprog/process.h */
+#endif 
