@@ -8,15 +8,18 @@
 
 struct process
 {
-    const char *file_name; 
-    struct thread *parent;  
-    struct list_elem childelem; 
-    struct semaphore load_sema; 
-    pid_t pid;                 
-    bool is_loaded;             
-    bool is_exited;             
-    int exit_status;   
-    struct semaphore exit_sema;          
+    /* Owned by process.c. */
+    const char *file_name; /* File name to execute. */
+
+    /* Shared between process.c and syscall.c. */
+    pid_t pid;                  /* Process identifier. */
+    struct thread *parent;      /* Parent process. */
+    struct list_elem childelem; /* List element for children list. */
+    bool is_loaded;             /* Whether program is loaded. */
+    struct semaphore load_sema; /* Semaphore for waiting until load. */
+    bool is_exited;             /* Whether process is exited. */
+    struct semaphore exit_sema; /* Semaphore for waiting until exit. */
+    int exit_status;            /* Exit status. */
 };
 
 tid_t process_execute(const char *);

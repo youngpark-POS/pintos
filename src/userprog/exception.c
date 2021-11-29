@@ -176,3 +176,10 @@ page_fault(struct intr_frame *f)
     return; 
 }
 
+bool
+is_stack_access(int32_t* fault_addr, uint32_t* esp)
+{
+    return fault_addr >= (esp - 32) && 
+            (PHYS_BASE - pg_round_down(fault_addr)) <= STACK_SIZE && 
+            find_vme(pg_round_down(fault_addr)) == NULL;
+}
