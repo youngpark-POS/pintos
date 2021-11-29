@@ -125,12 +125,6 @@ kill (struct intr_frame *f)
    description of "Interrupt 14--Page Fault Exception (#PF)" in
    [IA32-v3a] section 5.15 "Exception and Interrupt Reference". */
 
-bool
-is_stack_access(int32_t* fault_addr, uint32_t* esp)
-{
-    return (PHYS_BASE - pg_round_down(fault_addr)) <= STACK_SIZE && fault_addr >= (esp - 32) && find_vme(pg_round_down(fault_addr)) == NULL;
-}
-
 static void
 page_fault(struct intr_frame *f)
 {

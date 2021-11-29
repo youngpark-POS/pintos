@@ -464,13 +464,11 @@ init_thread(struct thread *t, const char *name, int priority)
     strlcpy(t->name, name, sizeof t->name);
     t->stack = (uint8_t *)t + PGSIZE;
 
-#ifdef USERPROG
     t->pcb = NULL;
     list_init(&t->children);
     t->next_fd = 2;
     for(int i = 0;i < FD_MAX;i++)
       t->fd_table[i] = NULL;
-#endif
     list_init(&t->mapping_list);
     t->pages = NULL;
     t->magic = THREAD_MAGIC;
