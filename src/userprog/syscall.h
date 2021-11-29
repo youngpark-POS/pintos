@@ -37,4 +37,5 @@ unsigned syscall_tell(int);
 void syscall_close(int);
 void mmap_file_write_at(struct file* file, void* addr, uint32_t read_bytes, off_t ofs);
 struct lock* get_file_lock(void);
+struct lock *syscall_get_filesys_lock(void);
 #endif /* userprog/syscall.h */
