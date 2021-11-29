@@ -109,19 +109,16 @@ struct frame* frame_evict(void)
     //ASSERT(!"file");
     // find victim frame
     
-    if(is_tail(clock_pointer) || is_back(clock_pointer)) next_elem = list_front(&frame_list);
-    else next_elem = list_next(clock_pointer);
-    clock_pointer=next_elem;
-    target=list_entry(next_elem, struct frame, ptable_elem);
+    clock_pointer = list_front(&frame_list);
+    target=list_entry(clock_pointer, struct frame, ptable_elem);
     while(pagedir_is_accessed(get_pagedir(target), target->entry->vaddr))
     {
         pagedir_set_accessed(get_pagedir(target), target->entry->vaddr, false);
-        if(is_tail(clock_pointer) || is_back(clock_pointer)) //== list_tail(&frame_list) || ==list_tail(&frame_list))
-            next_elem = list_front(&frame_list);
+        if(is_back(clock_pointer)) //== list_tail(&frame_list) || ==list_tail(&frame_list))
+            clock_pointer = list_front(&frame_list);
         else 
-            next_elem = list_next(clock_pointer);
-        clock_pointer=next_elem;
-        target=list_entry(next_elem, struct frame, ptable_elem);
+            clock_pointer = list_next(clock_pointer);
+        target=list_entry(clock_pointer, struct frame, ptable_elem);
     }
 
     //ASSERT(lock_held_by_current_thread(&frame_lock));

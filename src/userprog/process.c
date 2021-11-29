@@ -207,9 +207,11 @@ start_process(void *pcb_)
 int
 process_wait(tid_t child_tid)
 {
+    if (child_tid==-1) return -1;
     struct process *child;
     int exit_status = -1;
     child = process_get_child(child_tid);
+    
     if (child!=NULL) 
     {
         sema_down(&child->exit_sema);
