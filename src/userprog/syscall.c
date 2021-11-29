@@ -244,13 +244,13 @@ check_vaddr(void* esp, const void *vaddr)
     {
         syscall_exit(-1);
     }
-    if(vaddr < 0x8048000 || vaddr>PHYS_BASE || vaddr==0x20101234)
+    if(vaddr < 0x8048000 || vaddr>PHYS_BASE /* || vaddr==0x20101234*/)
     {
         syscall_exit(-1);
     }
     if(!find_vme(pg_round_down(vaddr)))
     {
-        if(is_stack_access(vaddr, esp))
+        if(is_stack_access(vaddr, esp) && vaddr >= PHYS_BASE - STACK_LIMIT)
         {
             if(vme_create(pg_round_down(vaddr), true, NULL,0, 0, 0, false, true)==false)
             {

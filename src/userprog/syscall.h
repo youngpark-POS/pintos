@@ -7,6 +7,8 @@
 #include "vm/frame.h"
 #include <debug.h>
 
+#define STACK_LIMIT 0x800000
+
 struct lock filesys_lock;
 typedef int mapid_t;
 
