@@ -22,9 +22,7 @@ bool is_back (struct list_elem* elem)
 
 void frame_push_back(struct frame* f)
 {
-    //lock_acquire(&frame_lock);
     list_push_back(&frame_list, &f->ptable_elem);
-    //lock_release(&frame_lock);
 }
 
 void frame_init(void)
@@ -58,10 +56,8 @@ struct frame* frame_allocate(struct vmentry* vme)
     {
         
         new_frame = frame_evict();
-        //ASSERT(!"come");
         new_frame->entry = vme;
     }
-    //list_push_back(&frame_list, &new_frame->ptable_elem);
     lock_release(&frame_lock);
     return new_frame;
 }
@@ -106,9 +102,8 @@ struct frame* frame_evict(void)
     struct list_elem* next_elem;
     bool success = true;
     int swap_num;
-    //ASSERT(!"file");
-    // find victim frame
     
+    // find victim page
     clock_pointer = list_front(&frame_list);
     target=list_entry(clock_pointer, struct frame, ptable_elem);
     while(pagedir_is_accessed(get_pagedir(target), target->entry->vaddr))
@@ -121,8 +116,7 @@ struct frame* frame_evict(void)
         target=list_entry(clock_pointer, struct frame, ptable_elem);
     }
 
-    //ASSERT(lock_held_by_current_thread(&frame_lock));
-    //ASSERT(!"file");
+    // swap out or write back
     entry = target->entry;
     entry->pretype = entry->type;
     switch(entry->type)

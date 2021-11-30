@@ -103,7 +103,6 @@ struct thread
     struct process *pcb;       
     struct list children;   
     uint32_t *pagedir;    
-    int next_fd;
     struct file* fd_table[FD_MAX];             
     struct file *running_file;
     struct hash *pages;          
@@ -158,7 +157,6 @@ struct process *thread_get_pcb(void);
 void thread_set_pcb(struct process *);
 struct list *thread_get_children(void);
 struct list *thread_get_fdt(void);
-int thread_get_next_fd(void);
 struct file *thread_get_running_file(void);
 void thread_set_running_file(struct file *);
 

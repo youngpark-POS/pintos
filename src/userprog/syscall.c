@@ -44,7 +44,6 @@ void syscall_munmap (mapid_t);
 
 static void clear_previous_pages(void* addr, off_t ofs);
 static mapid_t register_new_mmap(struct file* file, void* base, int page_count);
-static struct mapping* get_mapping_by_mapid(mapid_t id);
 
 /* Registers the system call interrupt handler. */
 void syscall_init(void)
@@ -358,7 +357,7 @@ bool syscall_remove(const char *file)
 int syscall_open(const char *file)
 {
     struct file *new_file;
-    int fd;
+    int fd, i;
 
     lock_acquire(&filesys_lock);
 
@@ -369,7 +368,7 @@ int syscall_open(const char *file)
         return -1;
     }
 
-    for(int i = 2;i < FD_MAX;i++)
+    for(i = 2;i < FD_MAX;i++)
     {
         if(thread_current()->fd_table[i] == NULL)
         {
@@ -497,7 +496,7 @@ syscall_mmap(int fd, void* addr)
   struct file* file;
   struct mapping* mapping;
   int i;
-  if(addr==NULL || /* addr < 0x8048000 || addr > 0xc0000000*/ !is_user_vaddr(addr) || pg_ofs(addr)) 
+  if(addr==NULL || !is_user_vaddr(addr) || pg_ofs(addr)) 
   {
     return -1;
   }

@@ -67,7 +67,8 @@ tid_t process_execute(const char *file_name)
     {
         palloc_free_page(pcb);
         palloc_free_page(fn_copy1);
-        goto done;
+        palloc_free_page(fn_copy2);
+        return tid;
     }
     else
     {
@@ -118,8 +119,6 @@ start_process(void *pcb_)
     }
 
     t->pages = malloc (sizeof *t->pages);
-    //if(t->pages == NULL)
-        //goto done;
     vm_init(t->pages);
     /* Initialize interrupt frame. */
     memset(&if_, 0, sizeof if_);
@@ -226,7 +225,7 @@ process_wait(tid_t child_tid)
 void process_exit(void)
 {
     uint32_t *pd;
-    int i, max_fd;
+    int i;
     struct thread *cur = thread_current();
     struct lock *filesys_lock;
     struct process *pcb;
@@ -244,8 +243,7 @@ void process_exit(void)
     pcb->is_exited = true;
     for (e = list_begin(children); e != list_end(children); e = list_next(e))
         process_remove_child(list_entry(e, struct process, childelem));
-    max_fd=thread_get_next_fd();
-    for (i = 2; i < max_fd; i++) syscall_close(i);
+    for (i = 2; i < FD_MAX; i++) syscall_close(i);
     sema_up(&pcb->exit_sema);
     if (pcb && !pcb->parent)  palloc_free_page(pcb);
     filesys_lock = syscall_get_filesys_lock();
@@ -290,7 +288,7 @@ void process_activate(void)
 /* Returns the current process's child process with pid PID. */
 struct process *process_get_child(pid_t pid)
 {
-    struct list *children;//= thread_get_children();
+    struct list *children;
     struct list_elem *e;
     struct process *pcb=NULL;
     int check=0;
@@ -332,7 +330,8 @@ struct file* process_get_file(int fd)
 int process_add_file(struct file* f)
 {
     struct thread* cur = thread_current();
-    for(int i = 2;i < FD_MAX;i++)
+    int i;
+    for(i = 2;i < FD_MAX;i++)
     {
         if(cur->fd_table[i] == NULL)
         {

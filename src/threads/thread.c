@@ -470,7 +470,6 @@ init_thread(struct thread *t, const char *name, int priority)
     for(i = 0;i < FD_MAX;i++)
       t->fd_table[i] = NULL;   
     
-    t->next_fd = 2;
     t->pages = NULL;
     t->magic = THREAD_MAGIC;
 
@@ -620,14 +619,6 @@ struct process *thread_get_pcb(void)
 struct list *thread_get_children(void)
 {
     return &thread_current()->children;
-}
-
-int thread_get_next_fd(void)
-{
-  int r;
-  r=thread_current()->next_fd;
-  thread_current()->next_fd++;
-  return r;
 }
 
 void thread_set_running_file(struct file *running_file)
