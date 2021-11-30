@@ -183,7 +183,6 @@ tid_t thread_create(const char *name, int priority,
     init_thread(t, name, priority);
     tid = t->tid = allocate_tid();
 
-    /*mapping id*/
     t->number_mapped=0;
 
     /* Stack frame for kernel_thread(). */
@@ -454,6 +453,7 @@ static void
 init_thread(struct thread *t, const char *name, int priority)
 {
     enum intr_level old_level;
+    int i;
 
     ASSERT(t != NULL);
     ASSERT(PRI_MIN <= priority && priority <= PRI_MAX);
@@ -466,10 +466,11 @@ init_thread(struct thread *t, const char *name, int priority)
 
     t->pcb = NULL;
     list_init(&t->children);
-    t->next_fd = 2;
-    for(int i = 0;i < FD_MAX;i++)
-      t->fd_table[i] = NULL;
     list_init(&t->mapping_list);
+    for(i = 0;i < FD_MAX;i++)
+      t->fd_table[i] = NULL;   
+    
+    t->next_fd = 2;
     t->pages = NULL;
     t->magic = THREAD_MAGIC;
 
@@ -592,55 +593,51 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-#ifdef USERPROG
-
-/* Sets the current thread's pagedir to NEW_PAGEDIR. */
-void thread_set_pagedir(uint32_t *new_pagedir)
+void thread_set_pagedir(uint32_t *pagedir)
 {
-    thread_current()->pagedir = new_pagedir;
+  if(pagedir == NULL) return;
+  thread_current()->pagedir = pagedir;
+  return;
 }
 
-/* Returns the current thread's pagedir. */
 uint32_t *thread_get_pagedir(void)
 {
     return thread_current()->pagedir;
 }
 
-/* Sets the current thread's pcb to NEW_PCB. */
-void thread_set_pcb(struct process *new_pcb)
+void thread_set_pcb(struct process *pcb)
 {
-    thread_current()->pcb = new_pcb;
+  if(pcb == NULL) return;
+  thread_current()->pcb = pcb;
+  return;
 }
 
-/* Returns the current thread's pcb. */
 struct process *thread_get_pcb(void)
 {
     return thread_current()->pcb;
 }
 
-/* Returns the current thread's children. */
 struct list *thread_get_children(void)
 {
     return &thread_current()->children;
 }
 
-/* Returns the current thread's next_fd and increments
-   it by 1. */
 int thread_get_next_fd(void)
 {
-    return thread_current()->next_fd++;
+  int r;
+  r=thread_current()->next_fd;
+  thread_current()->next_fd++;
+  return r;
 }
 
-/* Sets the current thread's running_file to NEW_RUNNING_FILE. */
-void thread_set_running_file(struct file *new_running_file)
+void thread_set_running_file(struct file *running_file)
 {
-    thread_current()->running_file = new_running_file;
+  if(running_file == NULL) return;
+  thread_current()->running_file = running_file;
+  return;
 }
 
-/* Returns the current thread's running_file. */
 struct file *thread_get_running_file(void)
 {
     return thread_current()->running_file;
 }
-
-#endif

@@ -244,7 +244,7 @@ check_vaddr(void* esp, const void *vaddr)
     {
         syscall_exit(-1);
     }
-    if(vaddr < 0x8048000 || vaddr>PHYS_BASE /* || vaddr==0x20101234*/)
+    if(vaddr < 0x8048000 || vaddr>PHYS_BASE)
     {
         syscall_exit(-1);
     }
@@ -489,7 +489,7 @@ void syscall_close(int fd)
     lock_release(&filesys_lock);
 }
 
-mapid_t 
+int
 syscall_mmap(int fd, void* addr)
 {
   int len, ofs = 0;
@@ -546,7 +546,7 @@ syscall_mmap(int fd, void* addr)
 }
 
 void
-syscall_munmap(mapid_t mapid)
+syscall_munmap(int mapid)
 {
   int i;
   struct vmentry* entry;

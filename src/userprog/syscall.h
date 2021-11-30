@@ -10,11 +10,10 @@
 #define STACK_LIMIT 0x800000
 
 struct lock filesys_lock;
-typedef int mapid_t;
 
 struct mapping
 {
-    mapid_t mapid;
+    int mapid;
     void* addr;
     struct file* file;
     struct list_elem elem;

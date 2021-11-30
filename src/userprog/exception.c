@@ -7,7 +7,7 @@
 #include "threads/vaddr.h"
 #include "threads/thread.h"
 
-
+#define STACK_LIMIT 0x800000
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -158,9 +158,9 @@ page_fault(struct intr_frame *f)
     if(fault_addr == NULL || !not_present || fault_addr < 0x8048000 || fault_addr>PHYS_BASE)
         syscall_exit(-1);
 
-    if(is_stack_access(fault_addr, f->esp))
+    if(is_stack_access(fault_addr, f->esp) && fault_addr >= PHYS_BASE - STACK_LIMIT)
     {
-        //if(!page_create_with_zero(pg_round_down(fault_addr)))
+        
         if(!vme_create(pg_round_down(fault_addr), true, NULL, 0, 
            0, 0, false, true))
             syscall_exit(-1);

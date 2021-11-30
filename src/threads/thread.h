@@ -99,30 +99,18 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem; /* List element. */
 
-    /* Owned by devices/timer.c. */
-    int64_t wake_ticks; /* Ticks to wake up. */
-
-    /* Shared between thread.c and synch.c. */
-    int original_priority;   /* Original priority before donation. */
-
-    /* Owned by thread.c. */
-    int nice;       /* Figure that indicates how nice to others. */
-    int recent_cpu; /* Weighted average amount of received CPU time. */
-
+#ifdef USERPROG
+    struct process *pcb;       
+    struct list children;   
+    uint32_t *pagedir;    
+    int next_fd;
+    struct file* fd_table[FD_MAX];             
+    struct file *running_file;
+    struct hash *pages;          
+#endif
+ 
     int number_mapped;
     struct list mapping_list;
-
-#ifdef USERPROG
-    /* Shared between userprog/process.c and userprog/syscall.c. */
-    uint32_t *pagedir;         /* Page directory. */
-    struct process *pcb;       /* Process control block. */
-    struct list children;      /* List of children processes. */
-    struct file* fd_table[FD_MAX];
-    int next_fd;               /* File descriptor for next file. */
-    struct file *running_file; /* Currently running file. */
-#endif
-
-   struct hash *pages;  /* Project 3 virtual pages */
 
     /* Owned by thread.c. */
     unsigned magic; /* Detects stack overflow. */
@@ -164,9 +152,8 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-#ifdef USERPROG
-uint32_t *thread_get_pagedir(void);
 void thread_set_pagedir(uint32_t *);
+uint32_t *thread_get_pagedir(void);
 struct process *thread_get_pcb(void);
 void thread_set_pcb(struct process *);
 struct list *thread_get_children(void);
@@ -174,6 +161,5 @@ struct list *thread_get_fdt(void);
 int thread_get_next_fd(void);
 struct file *thread_get_running_file(void);
 void thread_set_running_file(struct file *);
-#endif
 
 #endif /* threads/thread.h */
