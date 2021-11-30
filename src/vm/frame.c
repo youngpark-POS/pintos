@@ -103,20 +103,18 @@ struct frame* frame_evict(void)
     bool success = true;
     int swap_num;
     
-    // find victim page
     clock_pointer = list_front(&frame_list);
     target=list_entry(clock_pointer, struct frame, ptable_elem);
     while(pagedir_is_accessed(get_pagedir(target), target->entry->vaddr))
     {
         pagedir_set_accessed(get_pagedir(target), target->entry->vaddr, false);
-        if(is_back(clock_pointer)) //== list_tail(&frame_list) || ==list_tail(&frame_list))
+        if(is_back(clock_pointer)) 
             clock_pointer = list_front(&frame_list);
         else 
             clock_pointer = list_next(clock_pointer);
         target=list_entry(clock_pointer, struct frame, ptable_elem);
     }
 
-    // swap out or write back
     entry = target->entry;
     entry->pretype = entry->type;
     switch(entry->type)

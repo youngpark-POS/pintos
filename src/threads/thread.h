@@ -107,7 +107,7 @@ struct thread
     struct file *running_file;
     struct hash *pages;          
 #endif
- 
+
     int number_mapped;
     struct list mapping_list;
 

@@ -405,8 +405,6 @@ int syscall_read(int fd, void *buffer, unsigned size)
 
     if (fd == 0)
     {
-        unsigned i;
-
         for (i = 0; i < size; i++)
             *(uint8_t *)(buffer + i) = input_getc();
 
@@ -427,7 +425,7 @@ int syscall_read(int fd, void *buffer, unsigned size)
 int syscall_write(int fd, const void *buffer, unsigned size)
 {
     struct file* f;
-    int bytes_written, i;
+    int bytes_written;
 
     if (fd == 1)
     {

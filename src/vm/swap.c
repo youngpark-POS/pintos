@@ -9,7 +9,6 @@
 #include <string.h>
 
 #define NUM_SECTORS_PER_ENTRY 8 // 4096B per a block, 512B per a sector
-//#define NUM_SECTORS_PER_ENTRY (PGSIZE/BLOCK_SECTOR_SIZE)
 
 
 void swap_init()
@@ -19,7 +18,6 @@ void swap_init()
     ASSERT(swap_block!=NULL);
     swap_bitmap = bitmap_create(block_size(swap_block) / NUM_SECTORS_PER_ENTRY);
     ASSERT(swap_bitmap!=NULL);
-    //swap_bitmap = bitmap_create(8*1024);
     bitmap_set_all(swap_bitmap, true);
     lock_init(&swap_lock);
 }
